@@ -110,11 +110,26 @@ export function agendaSummary(items) {
   };
 }
 /** próximos vencimentos em aberto (a partir de meses anteriores atrasados até 2 meses à frente) */
+/**
+ * Próximos vencimentos para o Painel: no máximo UM item por recorrência (o vencimento mais
+ * próximo ainda não resolvido — atrasado ou futuro), mais os lançamentos previstos avulsos.
+ * Ordenados por urgência: os mais atrasados primeiro, depois os que vencem mais cedo.
+ */
 export function upcoming({ recurrences, txs, today = todayISO(), limit = 6 }) {
-  const key = today.slice(0, 7), out = [], windowStart = `${shiftMonth(key, -1)}-01`;
-  txs.filter((t) => !isPaid(t) && t.type !== 'transfer' && t.date < windowStart).forEach((t) => out.push({ id: `tx:${t.id}`, kind: 'tx', tx: t, date: t.date, description: t.description, amount: t.amount, type: t.type, accountId: t.accountId, categoryId: t.categoryId, status: 'late', daysToDue: diffDays(today, t.date) }));
-  for (let i = -1; i <= 2; i += 1) agendaOfMonth({ recurrences, txs, key: shiftMonth(key, i), today }).filter((x) => x.status !== 'paid' && x.type !== 'transfer').forEach((x) => out.push(x));
-  return out.sort((a, b) => a.date.localeCompare(b.date)).slice(0, limit);
+  const key = today.slice(0, 7), out = [];
+  txs.filter((t) => !isPaid(t) && t.type !== 'transfer' && !t.recurrenceId)
+    .forEach((t) => out.push({ id: `tx:${t.id}`, kind: 'tx', tx: t, date: t.date, description: t.description, amount: t.amount, type: t.type, accountId: t.accountId, categoryId: t.categoryId, status: t.date < today ? 'late' : t.date === today ? 'pending' : 'pending', daysToDue: diffDays(today, t.date) }));
+  recurrences.filter((r) => r.active !== false).forEach((rec) => {
+    for (let i = -3; i <= 12; i += 1) {
+      const k = shiftMonth(key, i);
+      const dates = occurrenceDates(rec, k);
+      const open = dates.filter((date) => !txs.some((t) => t.recurrenceId === rec.id && t.recurrenceDate === date && isPaid(t)));
+      if (!open.length) continue;
+      open.forEach((date) => out.push({ id: `rec:${rec.id}:${date}`, kind: 'occurrence', recurrence: rec, date, description: rec.description, amount: rec.amount, type: rec.type, accountId: rec.accountId, categoryId: rec.categoryId, status: statusOf(false, date, today), daysToDue: diffDays(today, date) }));
+      break;   // só o próximo vencimento em aberto desta recorrência — os seguintes ainda não importam
+    }
+  });
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description, 'pt-BR')).slice(0, limit);
 }
 /** saldo previsto no fim do mês: saldo em contas + a receber − a pagar (vencimentos em aberto até o fim do mês) */
 export function monthEndForecast({ accounts, txs, recurrences, today = todayISO() }) {

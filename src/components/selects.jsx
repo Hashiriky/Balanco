@@ -1,7 +1,10 @@
 'use client';
 import { useStore } from '@/lib/store.jsx';
-import { categoryIndex } from '@/lib/domain.js';
+import { categoryIndex, categoryPath, rootOf } from '@/lib/domain.js';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
+import { useUI } from '@/lib/ui-context.jsx';
+import { Icon } from '@/components/ui.jsx';
+import { cn } from '@/lib/util.js';
 
 export function AccountSelect({ value, onChange, exclude = [], only, id, ...rest }) {
   const { data } = useStore();
@@ -13,30 +16,27 @@ export function AccountSelect({ value, onChange, exclude = [], only, id, ...rest
     </select>
   );
 }
-/** categorias em dois níveis: o grupo (pai) e as subcategorias */
-export function CategorySelect({ type, value, onChange, exclude = [], includeArchived = false, allowEmpty = true, emptyLabel = 'Selecione…', ...rest }) {
+
+/**
+ * Campo de categoria com busca. Visualmente parece um <select>, mas ao clicar abre uma janela
+ * com um campo de busca e a lista agrupada por grupo — melhor para quem tem muitas categorias.
+ * Mesma API do <select> antigo (type, value, onChange, exclude, includeArchived, allowEmpty, emptyLabel).
+ */
+export function CategorySelect({ type, value, onChange, exclude = [], includeArchived = false, allowEmpty = true, emptyLabel = 'Selecione…', 'aria-label': ariaLabel, ...rest }) {
   const { data } = useStore();
-  const cats = data.categories.filter((c) => (!type || c.type === type));
-  const roots = cats.filter((c) => !c.parentId);
+  const ui = useUI();
   const idx = categoryIndex(data.categories);
-  // uma subcategoria também some se o GRUPO dela estiver arquivado (mantém a opção já selecionada, para não sumir da tela sem explicação)
-  const visible = (c) => (!c.archived || c.id === value || includeArchived) && !exclude.includes(c.id);
-  const visibleWithGroup = (c) => visible(c) && (!c.parentId || visible(idx.get(c.parentId)) || includeArchived);
+  const selected = value ? idx.get(value) : null;
+  const color = selected ? (rootOf(value, idx)?.color || selected.color) : null;
+  const label = !value ? emptyLabel : selected ? (selected.parentId ? categoryPath(value, idx) : `${selected.name} (geral)`) : 'Categoria removida';
   return (
-    <select className="select" value={value || ''} onChange={(e) => onChange(e.target.value)} {...rest}>
-      {allowEmpty && <option value="">{emptyLabel}</option>}
-      {roots.map((r) => {
-        const kids = cats.filter((c) => c.parentId === r.id && visibleWithGroup(c));
-        if (!visible(r) && !kids.length) return null;
-        return (
-          <optgroup key={r.id} label={r.name}>
-            {visible(r) && <option value={r.id}>{r.name} (geral)</option>}
-            {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-          </optgroup>
-        );
-      })}
-      {value && !idx.get(value) && <option value={value}>Categoria removida</option>}
-    </select>
+    <button
+      type="button" className="select cat-select-btn" aria-label={ariaLabel} aria-haspopup="dialog" {...rest}
+      onClick={() => ui.open('categoryPicker', { type, value, exclude, includeArchived, allowEmpty, emptyLabel, onSelect: onChange })}
+    >
+      <span className="cat-select-value">{color && <i className="dot" style={{ background: color }} />}<span className={cn(!value && 'muted')}>{label}</span></span>
+      <Icon name="chevronDown" size={16} className="muted" />
+    </button>
   );
 }
 export const WEEKDAY_OPTIONS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];

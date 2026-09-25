@@ -33,7 +33,7 @@ function CardPanel({ card }) {
       </div>
       {inv.items.length ? (
         <div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th className="num">Valor</th></tr></thead>
-          <tbody>{inv.items.map((t) => <tr key={t.id} className="click" onClick={() => ui.open('tx', { tx: t })}><td className="w-date">{fmtDate(t.date)}</td><td>{t.description}</td><td><CategoryLabel id={t.categoryId} lk={lk} /></td><td className="num"><Money cents={t.type === 'income' ? -t.amount : t.amount} /></td></tr>)}</tbody></table></div>
+          <tbody>{inv.items.map((t) => <tr key={t.id} className="click" onClick={() => ui.open('txView', { tx: t })}><td className="w-date">{fmtDate(t.date)}</td><td>{t.description}</td><td><CategoryLabel id={t.categoryId} lk={lk} /></td><td className="num"><Money cents={t.type === 'income' ? -t.amount : t.amount} /></td></tr>)}</tbody></table></div>
       ) : <Empty title="Sem compras nesta fatura" />}
       {inv.payments.length > 0 && <p className="muted">Pagamentos: {inv.payments.map((p) => `${fmtDate(p.date)} — ${fmtMoney(p.amount)}`).join(' · ')}</p>}
     </Card>
@@ -62,7 +62,7 @@ export default function Accounts() {
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Nome</th><th>Tipo</th><th className="num">Saldo atual</th><th className="num">Previsto no fim do mês</th><th /></tr></thead>
             <tbody>{rows.map((r) => (
-              <tr key={r.account.id} className={r.account.archived ? 'muted click' : 'click'} onClick={() => ui.open('account', { account: r.account })}>
+              <tr key={r.account.id} className={r.account.archived ? 'muted click' : 'click'} onClick={() => ui.open('accountView', { account: r.account })}>
                 <td>{r.account.name}{r.account.archived && <Tag>Arquivada</Tag>}</td><td>{ACCOUNT_TYPES[r.account.type]}{isCredit(r.account) && <small className="muted"> · limite {fmtMoney(r.account.limit)}</small>}</td>
                 <td className="num"><Money cents={r.current} tone="auto" /></td><td className="num"><Money cents={r.forecast} tone="auto" /></td>
                 <td className="w-act"><button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); ui.open('account', { account: r.account }); }}>Editar</button></td>

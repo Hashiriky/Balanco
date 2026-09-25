@@ -48,6 +48,9 @@ export default function Nav() {
       <aside className={cn('sidebar', collapsed && 'collapsed', mobileOpen && 'mobile-open')} aria-label="Navegação principal">
         <div className="sidebar-top">
           <Link href="/" className="brand"><span className="brand-mark">B</span><span className="side-label">Balanço</span></Link>
+          <button type="button" className="icon-btn collapse-toggle" onClick={toggleCollapsed} aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'} aria-pressed={collapsed} title={collapsed ? 'Expandir menu' : 'Recolher menu'}>
+            <Icon name={collapsed ? 'right' : 'left'} size={16} />
+          </button>
           <button type="button" className="icon-btn nav-close" onClick={() => setMobileOpen(false)} aria-label="Fechar menu"><Icon name="x" size={18} /></button>
         </div>
         <nav className="nav-links">{ITEMS.map(link)}<div className="nav-sep" />{MORE.map(link)}</nav>
@@ -62,9 +65,6 @@ export default function Nav() {
           <button type="button" className="nav-user" onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen} title={collapsed ? (status === 'user' ? (user?.name || user?.email) : 'Sem conta') : undefined}>
             <span className={cn('user-dot', status === 'user' && `dot-${sync}`)}><Icon name="user" size={17} /></span>
             <span className="side-label user-text"><strong>{status === 'user' ? (user?.name || user?.email) : 'Sem conta'}</strong><small>{status === 'user' ? SYNC[sync] : 'Dados neste aparelho'}</small></span>
-          </button>
-          <button type="button" className="collapse-btn" onClick={toggleCollapsed} aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'} aria-pressed={collapsed}>
-            <Icon name={collapsed ? 'right' : 'left'} size={16} /><span className="side-label">Recolher menu</span>
           </button>
         </div>
       </aside>

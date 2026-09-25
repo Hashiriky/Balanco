@@ -104,7 +104,7 @@ export default function Transactions() {
               <th className="num sortable" onClick={() => sortBy('amount')}>Valor{arrow('amount')}</th>
             </tr></thead>
             <tbody>{shown.map((t) => (
-              <tr key={t.id} className={selected.has(t.id) ? 'selected click' : 'click'} onClick={() => ui.open('tx', { tx: t })}>
+              <tr key={t.id} className={selected.has(t.id) ? 'selected click' : 'click'} onClick={() => ui.open('txView', { tx: t })}>
                 <td className="w-chk" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Selecionar ${t.description}`} checked={selected.has(t.id)} onChange={() => toggle(t.id)} /></td>
                 <td className="w-date">{fmtDate(t.date)}</td><td><TxDescription t={t} lk={lk} /></td>
                 <td>{t.type === 'transfer' ? <span className="muted">Transferência</span> : <CategoryLabel id={t.categoryId} lk={lk} />}</td><td><AccountName id={t.accountId} lk={lk} /></td>

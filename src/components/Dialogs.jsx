@@ -1,18 +1,86 @@
 'use client';
 // Janelas (formulários) do app.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { AccountName, CategoryLabel, StatusTag, TxAmount, useLookups } from '@/components/pages/shared.jsx';
 import { AccountSelect, CategorySelect, WEEKDAY_OPTIONS } from '@/components/selects.jsx';
-import { Choice, Field, Icon, Modal, MoneyInput } from '@/components/ui.jsx';
+import { Choice, Field, Icon, Modal, Money, MoneyInput, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
-import { invoiceMonthOf } from '@/lib/domain.js';
+import { accountBalance, invoiceMonthOf } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
-import { addMonthsISO, centsToField, fmtDate, fmtMoney, isValidISO, monthKey, monthLabel, parseMoney, splitCents, todayISO, uid } from '@/lib/util.js';
+import { addMonthsISO, centsToField, cn, fmtDate, fmtMoney, isValidISO, monthKey, monthLabel, norm, parseMoney, splitCents, todayISO, uid } from '@/lib/util.js';
 
 const hasErrors = (e) => Object.keys(e).length > 0;
 
 /* ---------- Confirmação ---------- */
+/* ---------- Categoria (busca) ---------- */
+export function CategoryPickerDialog({ type, value, exclude = [], includeArchived = false, allowEmpty = true, emptyLabel = 'Selecione…', onSelect, onClose }) {
+  const { data } = useStore();
+  const [q, setQ] = useState('');
+  const [active, setActive] = useState(0);
+  const nq = norm(q);
+  const visible = (c) => (!c.archived || c.id === value || includeArchived) && !exclude.includes(c.id);
+  const groups = useMemo(() => {
+    const cats = data.categories.filter((c) => !type || c.type === type);
+    const roots = cats.filter((c) => !c.parentId);
+    return roots.map((r) => {
+      const kids = cats.filter((c) => c.parentId === r.id && visible(c) && (!r.archived || includeArchived || r.id === value));
+      const rootMatches = !nq || norm(r.name).includes(nq);
+      const filteredKids = kids.filter((k) => !nq || rootMatches || norm(k.name).includes(nq));
+      const showRoot = visible(r) && (!nq || rootMatches);
+      return { root: r, kids: filteredKids, showRoot };
+    }).filter((g) => g.showRoot || g.kids.length);
+  }, [data.categories, type, nq, value, includeArchived]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* usadas com mais frequência (só quando não tem busca), pra encurtar listas longas */
+  const frequent = useMemo(() => {
+    if (nq) return [];
+    const idx = new Map(data.categories.map((c) => [c.id, c]));
+    const counts = new Map();
+    data.transactions.forEach((t) => { if (t.categoryId && (!type || t.type === type)) counts.set(t.categoryId, (counts.get(t.categoryId) || 0) + 1); });
+    return [...counts.entries()].filter(([id]) => { const c = idx.get(id); return c && visible(c) && c.id !== value; })
+      .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => idx.get(id));
+  }, [data.transactions, data.categories, type, nq, value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const select = (id) => { onSelect(id); onClose(); };
+  const showEmpty = allowEmpty && (!nq || norm(emptyLabel).includes(nq));
+  const nothing = !showEmpty && !frequent.length && !groups.length;
+  /* lista achatada (na ordem exibida) pra navegar com as setas do teclado */
+  const flat = useMemo(() => {
+    const out = [];
+    if (showEmpty) out.push('');
+    frequent.forEach((c) => out.push(c.id));
+    groups.forEach((g) => { if (g.showRoot) out.push(g.root.id); g.kids.forEach((k) => out.push(k.id)); });
+    return out;
+  }, [showEmpty, frequent, groups]);
+  const onKeyDown = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, flat.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter' && flat.length) { e.preventDefault(); select(flat[Math.min(active, flat.length - 1)]); }
+  };
+  const itemProps = (id) => { const i = flat.indexOf(id); return { className: cn('cat-pick-item', value === id && 'on', i === active && 'active'), onMouseEnter: () => setActive(i) }; };
+  return (
+    <Modal title="Escolher categoria" size="sm" onClose={onClose}>
+      <input className="input" type="search" value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={onKeyDown} placeholder="Buscar categoria…" aria-label="Buscar categoria" data-autofocus />
+      <div className="cat-pick-list">
+        {showEmpty && <button type="button" {...itemProps('')} onClick={() => select('')}>{emptyLabel}</button>}
+        {!!frequent.length && (
+          <div className="cat-pick-group">
+            <div className="cat-pick-group-label">Usadas com frequência</div>
+            {frequent.map((c) => <button key={c.id} type="button" {...itemProps(c.id)}><i className="dot" style={{ background: c.color }} />{c.parentId ? c.name : `${c.name} (geral)`}</button>)}
+          </div>
+        )}
+        {groups.map((g) => (
+          <div key={g.root.id} className="cat-pick-group">
+            <button type="button" className="cat-pick-group-label cat-pick-group-btn" onClick={() => g.showRoot && select(g.root.id)}><i className="dot" style={{ background: g.root.color }} />{g.root.name}{g.showRoot && <span className="muted"> (usar geral)</span>}</button>
+            {g.kids.map((k) => <button key={k.id} type="button" {...itemProps(k.id)}>{k.name}</button>)}
+          </div>
+        ))}
+        {nothing && <p className="muted pad">Nenhuma categoria encontrada.</p>}
+      </div>
+    </Modal>
+  );
+}
+
 export function ConfirmDialog({ title = 'Confirmar', message, okLabel = 'Confirmar', danger, extraLabel, resolve, onClose }) {
   const [done, setDone] = useState(false);
   const finish = (v, close) => { setDone(true); resolve(v); close(); };
@@ -24,6 +92,63 @@ export function ConfirmDialog({ title = 'Confirmar', message, okLabel = 'Confirm
         <button type="button" className={danger ? 'btn btn-danger' : 'btn btn-primary'} onClick={() => finish(true, close)} data-autofocus>{okLabel}</button>
       </>)}>
       <p>{message}</p>
+    </Modal>
+  );
+}
+
+/* ---------- Ver detalhes (só leitura) ---------- */
+export function TxViewDialog({ tx, onClose }) {
+  const ui = useUI();
+  const lk = useLookups();
+  const isTransfer = tx.type === 'transfer';
+  return (
+    <Modal title="Detalhes do lançamento" size="sm" onClose={onClose}
+      footer={(close) => (<>
+        <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Fechar</button>
+        <button type="button" className="btn btn-primary" onClick={() => { close(); setTimeout(() => ui.open('tx', { tx }), 0); }}><Icon name="edit" size={16} />Editar</button>
+      </>)}>
+      <div className="view-amount"><TxAmount t={tx} /></div>
+      <dl className="view-grid">
+        <div className="span2"><dt>Descrição</dt><dd>{tx.description}</dd></div>
+        <div><dt>Data</dt><dd>{fmtDate(tx.date)}</dd></div>
+        <div><dt>Situação</dt><dd><StatusTag t={tx} today={todayISO()} /></dd></div>
+        {isTransfer ? (<>
+          <div><dt>Conta de origem</dt><dd><AccountName id={tx.accountId} lk={lk} /></dd></div>
+          <div><dt>Conta de destino</dt><dd><AccountName id={tx.toAccountId} lk={lk} /></dd></div>
+        </>) : (<>
+          <div><dt>Conta</dt><dd><AccountName id={tx.accountId} lk={lk} /></dd></div>
+          <div><dt>Categoria</dt><dd><CategoryLabel id={tx.categoryId} lk={lk} /></dd></div>
+        </>)}
+        {tx.installment && <div><dt>Parcela</dt><dd>{tx.installment.number} de {tx.installment.total}</dd></div>}
+        {tx.recurrenceId && <div><dt>Origem</dt><dd>Gerado por uma recorrência (veja a Agenda)</dd></div>}
+        {tx.notes && <div className="span2"><dt>Observações</dt><dd>{tx.notes}</dd></div>}
+      </dl>
+    </Modal>
+  );
+}
+export function AccountViewDialog({ account, onClose }) {
+  const { data } = useStore();
+  const ui = useUI();
+  const today = todayISO();
+  const bal = accountBalance(account, data.transactions, { upTo: today, includePending: false });
+  const isCard = account.type === 'credit';
+  return (
+    <Modal title="Detalhes da conta" size="sm" onClose={onClose}
+      footer={(close) => (<>
+        <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Fechar</button>
+        <button type="button" className="btn btn-primary" onClick={() => { close(); setTimeout(() => ui.open('account', { account }), 0); }}><Icon name="edit" size={16} />Editar</button>
+      </>)}>
+      <div className="view-amount"><Money cents={bal} tone="auto" /></div>
+      <dl className="view-grid">
+        <div><dt>Nome</dt><dd>{account.name}</dd></div>
+        <div><dt>Tipo</dt><dd>{ACCOUNT_TYPES[account.type]}</dd></div>
+        {isCard && (<>
+          <div><dt>Limite</dt><dd>{fmtMoney(account.limit)}</dd></div>
+          <div><dt>Fechamento</dt><dd>Dia {account.closingDay}</dd></div>
+          <div><dt>Vencimento</dt><dd>Dia {account.dueDay}</dd></div>
+        </>)}
+        {account.archived && <div><dt>Situação</dt><dd><Tag tone="warn">Arquivada</Tag></dd></div>}
+      </dl>
     </Modal>
   );
 }

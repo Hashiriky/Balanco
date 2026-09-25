@@ -11,6 +11,7 @@ const PATHS = {
   edit: 'M4 20h4L19 9l-4-4L4 16v4z', trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3', download: 'M12 4v11M7 11l5 5 5-5M4 20h16', upload: 'M12 16V5M7 9l5-5 5 5M4 20h16',
   check: 'M5 12.5l4.5 4.5L19 7.5', alert: 'M12 4l9 16H3L12 4zM12 10v4M12 17h.01', up: 'M12 19V5M6 11l6-6 6 6', down: 'M12 5v14M6 13l6 6 6-6', logout: 'M9 4H5v16h4M16 8l4 4-4 4M10 12h10',
   user: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c1-4 4-6 8-6s7 2 8 6', card: 'M3 6h18v12H3zM3 10h18M6 15h4', swap: 'M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7', file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+  search: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35', chevronDown: 'M6 9l6 6 6-6', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 100-6 3 3 0 000 6z',
 };
 export function Icon({ name, size = 18, className }) {
   return <svg className={cn('icon', className)} viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={PATHS[name] || ''} /></svg>;

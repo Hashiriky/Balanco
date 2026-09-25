@@ -1,8 +1,9 @@
 'use client';
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
 import { Alert, Card, Empty, Field, Tabs, Tag } from '@/components/ui.jsx';
 import * as cloud from '@/lib/cloud.js';
+import { usePrefs } from '@/lib/prefs.js';
 import { buildBackup, transactionsToCSV } from '@/lib/storage.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast, toastError } from '@/lib/toast.js';
@@ -79,6 +80,23 @@ function DataTab() {
     </>
   );
 }
+function PreferencesTab() {
+  const [prefs, updatePrefs] = usePrefs();
+  const [val, setVal] = useState(String(prefs.alertDays));
+  useEffect(() => setVal(String(prefs.alertDays)), [prefs.alertDays]);
+  const commit = () => {
+    const n = Math.max(0, Math.min(60, Number(val) || 0));
+    setVal(String(n)); updatePrefs({ alertDays: n });
+  };
+  return (
+    <Card title="Alertas de vencimento">
+      <p className="muted">Contas a vencer ganham um destaque (cor de aviso) na Agenda quando faltarem poucos dias. Defina a partir de quantos dias antes isso deve aparecer.</p>
+      <Field label="Avisar a partir de quantos dias antes do vencimento" help="0 = só no dia do vencimento.">
+        <input className="input" type="number" min={0} max={60} value={val} onChange={(e) => setVal(e.target.value)} onBlur={commit} aria-label="Dias de antecedência para alerta" style={{ maxWidth: 120 }} />
+      </Field>
+    </Card>
+  );
+}
 function AccountTab() {
   const { status, user, refreshUser, signOut, setAuthOpen, cloudReady } = useStore();
   const [name, setName] = useState(user?.name || ''); const [email, setEmail] = useState(user?.email || '');
@@ -117,8 +135,8 @@ export default function Settings() {
   return (
     <>
       <header className="page-header"><div><h1>Ajustes</h1></div></header>
-      <Tabs label="Ajustes" value={tab} onChange={setTab} tabs={[{ value: 'categories', label: 'Categorias' }, { value: 'rules', label: 'Regras' }, { value: 'data', label: 'Dados e backup' }, { value: 'account', label: 'Conta' }]} />
-      <div className="tab-panel">{tab === 'categories' && <CategoriesTab />}{tab === 'rules' && <RulesTab />}{tab === 'data' && <DataTab />}{tab === 'account' && <AccountTab />}</div>
+      <Tabs label="Ajustes" value={tab} onChange={setTab} tabs={[{ value: 'categories', label: 'Categorias' }, { value: 'rules', label: 'Regras' }, { value: 'preferences', label: 'Preferências' }, { value: 'data', label: 'Dados e backup' }, { value: 'account', label: 'Conta' }]} />
+      <div className="tab-panel">{tab === 'categories' && <CategoriesTab />}{tab === 'rules' && <RulesTab />}{tab === 'preferences' && <PreferencesTab />}{tab === 'data' && <DataTab />}{tab === 'account' && <AccountTab />}</div>
     </>
   );
 }

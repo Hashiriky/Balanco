@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BarChart, HBars } from '@/components/charts.jsx';
 import { AccountName, CategoryLabel, TxAmount, TxDescription, useLookups } from '@/components/pages/shared.jsx';
 import { Alert, Card, Empty, Kpi, Money, PageHeader, ProgressBar } from '@/components/ui.jsx';
@@ -10,11 +10,15 @@ import { useUI } from '@/lib/ui-context.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
 import { fmtDate, fmtMoney, monthKey, monthLabel, sum, todayISO } from '@/lib/util.js';
 
+const NEXT_LIMIT_KEY = 'balanco.nextLimit';
 export default function Dashboard() {
   const { data, viewMonth } = useStore();
   const ui = useUI();
   const lk = useLookups();
   const today = todayISO(), isCurrent = viewMonth === monthKey(new Date());
+  const [nextLimit, setNextLimit] = useState(5);
+  useEffect(() => { try { setNextLimit(Number(localStorage.getItem(NEXT_LIMIT_KEY)) || 5); } catch { /* ignore */ } }, []);
+  const changeNextLimit = (n) => { setNextLimit(n); try { localStorage.setItem(NEXT_LIMIT_KEY, String(n)); } catch { /* ignore */ } };
   const v = useMemo(() => {
     const { accounts, transactions: txs, recurrences, budgets, categories } = data;
     const ov = accountsOverview(accounts, txs, today), real = monthTotals(txs, viewMonth);
@@ -26,11 +30,11 @@ export default function Dashboard() {
     return {
       ov, real, plan, agSum: agendaSummary(ag), forecast: monthEndForecast({ accounts, txs, recurrences, today }), series: cashflowSeries(txs, viewMonth, 12), total,
       cats: cats.map((c) => ({ id: c.categoryId, value: c.amount, label: idx.get(c.categoryId)?.name || 'Sem categoria', color: rootOf(c.categoryId, idx)?.color || '#94a3b8' })),
-      next: upcoming({ recurrences, txs, today, limit: 6 }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
+      next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
       buds: budgetRows({ budgets, txs, categories, key: viewMonth }).slice(0, 5),
       recent: [...txs].filter(isPaid).sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8),
     };
-  }, [data, viewMonth, today]);
+  }, [data, viewMonth, today, nextLimit]);
 
   if (!data.accounts.length) {
     return (
@@ -70,7 +74,12 @@ export default function Dashboard() {
         <Card title="Despesas por categoria">{v.cats.length ? <HBars items={v.cats} total={v.total} /> : <Empty title="Sem despesas neste mês" />}</Card>
       </div>
       <div className="grid-2">
-        <Card title="Próximos vencimentos" actions={<Link href="/agenda" className="link">Abrir agenda</Link>} flush>
+        <Card title="Próximos vencimentos" actions={<>
+          <select className="select select-sm" value={nextLimit} onChange={(e) => changeNextLimit(Number(e.target.value))} aria-label="Quantos vencimentos mostrar">
+            <option value={3}>Mostrar 3</option><option value={5}>Mostrar 5</option><option value={8}>Mostrar 8</option><option value={12}>Mostrar 12</option>
+          </select>
+          <Link href="/agenda" className="link">Abrir agenda</Link>
+        </>} flush>
           {v.next.length ? (
             <table className="table"><tbody>{v.next.map((i) => (
               <tr key={i.id}><td className="w-date">{fmtDate(i.date)}</td><td>{i.description}<div className="sub">{i.status === 'late' ? <span className="neg">Em atraso</span> : i.daysToDue === 0 ? 'Vence hoje' : `Vence em ${i.daysToDue} dia${i.daysToDue > 1 ? 's' : ''}`}</div></td>
@@ -88,7 +97,7 @@ export default function Dashboard() {
         <Card title="Últimas movimentações" actions={<Link href="/lancamentos" className="link">Ver todos</Link>} flush>
           {v.recent.length ? (
             <table className="table"><tbody>{v.recent.map((t) => (
-              <tr key={t.id} className="click" onClick={() => ui.open('tx', { tx: t })}><td className="w-date">{fmtDate(t.date)}</td><td><TxDescription t={t} lk={lk} />{t.type !== 'transfer' && <div className="sub"><CategoryLabel id={t.categoryId} lk={lk} /> · <AccountName id={t.accountId} lk={lk} /></div>}</td><td className="num"><TxAmount t={t} /></td></tr>
+              <tr key={t.id} className="click" onClick={() => ui.open('txView', { tx: t })}><td className="w-date">{fmtDate(t.date)}</td><td><TxDescription t={t} lk={lk} />{t.type !== 'transfer' && <div className="sub"><CategoryLabel id={t.categoryId} lk={lk} /> · <AccountName id={t.accountId} lk={lk} /></div>}</td><td className="num"><TxAmount t={t} /></td></tr>
             ))}</tbody></table>
           ) : <Empty title="Sem movimentações" />}
         </Card>
