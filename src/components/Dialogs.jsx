@@ -57,12 +57,12 @@ export function CategoryPickerDialog({ type, value, exclude = [], includeArchive
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
     else if (e.key === 'Enter' && flat.length) { e.preventDefault(); select(flat[Math.min(active, flat.length - 1)]); }
   };
-  const itemProps = (id) => { const i = flat.indexOf(id); return { className: cn('cat-pick-item', value === id && 'on', i === active && 'active'), onMouseEnter: () => setActive(i) }; };
+  const itemProps = (id) => { const i = flat.indexOf(id); return { className: cn('cat-pick-item', value === id && 'on', i === active && 'active'), onMouseEnter: () => setActive(i), onClick: () => select(id) }; };
   return (
     <Modal title="Escolher categoria" size="sm" onClose={onClose}>
       <input className="input" type="search" value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={onKeyDown} placeholder="Buscar categoria…" aria-label="Buscar categoria" data-autofocus />
       <div className="cat-pick-list">
-        {showEmpty && <button type="button" {...itemProps('')} onClick={() => select('')}>{emptyLabel}</button>}
+        {showEmpty && <button type="button" {...itemProps('')}>{emptyLabel}</button>}
         {!!frequent.length && (
           <div className="cat-pick-group">
             <div className="cat-pick-group-label">Usadas com frequência</div>
