@@ -32,9 +32,29 @@ export function accountsOverview(accounts, txs, today = todayISO()) {
     current: accountBalance(account, txs, { upTo: today }),
     forecast: accountBalance(account, txs, { upTo: lastDayOfMonth(key), includePending: true }),
   }));
-  const assets = sum(rows.filter((r) => !isCredit(r.account)), (r) => r.current);
+  const invested = sum(rows.filter((r) => r.account.type === 'investment'), (r) => r.current);
+  const liquid = sum(rows.filter((r) => !isCredit(r.account) && r.account.type !== 'investment'), (r) => r.current);
+  const assets = liquid + invested;
   const cards = sum(rows.filter((r) => isCredit(r.account)), (r) => r.current);
-  return { rows, assets, cards, netWorth: assets + cards };
+  return { rows, assets, liquid, invested, cards, netWorth: assets + cards };
+}
+
+/* ---------- Investimentos ---------- */
+/** saldo, total investido (principal) e rendimento acumulado (R$ e %) de UMA conta de investimento */
+export function accountYield(account, txs, today = todayISO()) {
+  const balance = accountBalance(account, txs, { upTo: today, includePending: false });
+  const yieldTxs = txs.filter((t) => t.accountId === account.id && t.isYield && isPaid(t));
+  const totalYield = sum(yieldTxs, (t) => (t.type === 'income' ? t.amount : -t.amount));
+  const principal = balance - totalYield;
+  const pct = principal > 0 ? (totalYield / principal) * 100 : null;
+  const lastUpdate = yieldTxs.reduce((max, t) => (!max || t.date > max ? t.date : max), null);
+  return { balance, totalYield, principal, pct, lastUpdate };
+}
+/** o mesmo, somado entre TODAS as contas de investimento (pro Painel) */
+export function investmentsOverview(accounts, txs, today = todayISO()) {
+  const rows = accounts.filter((a) => !a.archived && a.type === 'investment').map((account) => ({ account, ...accountYield(account, txs, today) }));
+  const balance = sum(rows, (r) => r.balance), totalYield = sum(rows, (r) => r.totalYield), principal = sum(rows, (r) => r.principal);
+  return { rows, balance, totalYield, principal, pct: principal > 0 ? (totalYield / principal) * 100 : null };
 }
 
 /* ---------- Resultado do período ---------- */
@@ -134,7 +154,7 @@ export function upcoming({ recurrences, txs, today = todayISO(), limit = 6 }) {
 /** saldo previsto no fim do mês: saldo em contas + a receber − a pagar (vencimentos em aberto até o fim do mês) */
 export function monthEndForecast({ accounts, txs, recurrences, today = todayISO() }) {
   const key = today.slice(0, 7);
-  const assets = sum(accounts.filter((a) => !a.archived && !isCredit(a)), (a) => accountBalance(a, txs, { upTo: today }));
+  const assets = sum(accounts.filter((a) => !a.archived && !isCredit(a) && a.type !== 'investment'), (a) => accountBalance(a, txs, { upTo: today }));
   const open = agendaOfMonth({ recurrences, txs, key, today }).filter((i) => i.status !== 'paid' && i.type !== 'transfer');
   const receivable = sum(open.filter((i) => i.type === 'income'), (i) => i.amount), payable = sum(open.filter((i) => i.type === 'expense'), (i) => i.amount);
   return { assets, receivable, payable, projected: assets + receivable - payable };

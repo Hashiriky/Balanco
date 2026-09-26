@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
-import { Card, Empty, Kpi, Money, PageHeader, ProgressBar, Tag } from '@/components/ui.jsx';
+import { Card, Empty, Icon, Kpi, Money, PageHeader, ProgressBar, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
 import { accountsOverview, cardAvailable, cardInvoice, cardUsed, isCredit } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
@@ -28,8 +28,8 @@ function CardPanel({ card }) {
       </div>
       <div className="inv-actions">
         <span>Pago: <strong>{fmtMoney(inv.paid)}</strong> · Restante: <strong>{fmtMoney(inv.remaining)}</strong></span>
-        <button type="button" className="btn btn-primary btn-sm" disabled={inv.remaining <= 0} onClick={() => ui.open('payInvoice', { card, invoice: inv })}>Pagar fatura</button>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => ui.open('tx', { preset: { type: 'expense', accountId: card.id } })}>Lançar compra</button>
+        <button type="button" className="btn btn-primary" disabled={inv.remaining <= 0} onClick={() => ui.open('payInvoice', { card, invoice: inv })}><Icon name="check" size={16} />Pagar fatura</button>
+        <button type="button" className="btn btn-secondary" onClick={() => ui.open('tx', { preset: { type: 'expense', accountId: card.id } })}><Icon name="plus" size={16} />Lançar compra</button>
       </div>
       {inv.items.length ? (
         <div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th className="num">Valor</th></tr></thead>

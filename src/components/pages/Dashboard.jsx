@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, HBars } from '@/components/charts.jsx';
 import { AccountName, CategoryLabel, TxAmount, TxDescription, useLookups } from '@/components/pages/shared.jsx';
 import { Alert, Card, Empty, Kpi, Money, PageHeader, ProgressBar } from '@/components/ui.jsx';
-import { accountsOverview, agendaOfMonth, agendaSummary, budgetRows, buildAlerts, byCategory, cashflowSeries, categoryIndex, isCredit, isPaid, monthEndForecast, monthTotals, rootOf, upcoming } from '@/lib/domain.js';
+import { accountsOverview, agendaOfMonth, agendaSummary, budgetRows, buildAlerts, byCategory, cashflowSeries, categoryIndex, investmentsOverview, isCredit, isPaid, monthEndForecast, monthTotals, rootOf, upcoming } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
-import { fmtDate, fmtMoney, monthKey, monthLabel, sum, todayISO } from '@/lib/util.js';
+import { cn, fmtDate, fmtMoney, monthKey, monthLabel, sum, todayISO } from '@/lib/util.js';
 
 const NEXT_LIMIT_KEY = 'balanco.nextLimit';
 
@@ -30,6 +30,7 @@ export default function Dashboard() {
     const total = sum(byCategory(txs.filter((t) => t.date.startsWith(viewMonth)), categories, { includePending: false }), (c) => c.amount);
     return {
       ov, real, plan, agSum: agendaSummary(ag), forecast: monthEndForecast({ accounts, txs, recurrences, today }), series: cashflowSeries(txs, viewMonth, 12), total,
+      inv: investmentsOverview(accounts, txs, today),
       cats: cats.map((c) => ({ id: c.categoryId, value: c.amount, label: idx.get(c.categoryId)?.name || 'Sem categoria', color: rootOf(c.categoryId, idx)?.color || '#94a3b8' })),
       next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
       buds: budgetRows({ budgets, txs, categories, key: viewMonth }).slice(0, 5),
@@ -58,8 +59,11 @@ export default function Dashboard() {
         <button type="button" className="btn btn-primary" onClick={() => ui.open('tx')}>Novo lançamento</button>
       </PageHeader>
       {v.alerts.length > 0 && <div className="alerts">{v.alerts.map((a) => <Alert key={a.id} tone={a.tone} action={<Link href={a.href} className="link">Ver</Link>}>{a.text}{a.value ? <> — <Money cents={a.value} /></> : null}</Alert>)}</div>}
-      <div className="kpis">
-        <Kpi label="Saldo em contas" value={<Money cents={v.ov.assets} />} sub={v.ov.cards < 0 ? `Faturas de cartão em aberto: ${fmtMoney(-v.ov.cards)}` : 'Sem dívidas de cartão'} />
+      <div className={cn('kpis', v.inv.rows.length > 0 && 'kpis-5')}>
+        <Kpi label="Saldo disponível" value={<Money cents={v.ov.liquid} />} sub={v.ov.cards < 0 ? `Faturas de cartão em aberto: ${fmtMoney(-v.ov.cards)}` : 'Sem dívidas de cartão'} />
+        {v.inv.rows.length > 0 && (
+          <Kpi label="Investido" value={<Money cents={v.inv.balance} />} sub={v.inv.pct !== null ? `Rendimento acumulado: ${fmtMoney(v.inv.totalYield)} (${v.inv.pct >= 0 ? '+' : ''}${v.inv.pct.toFixed(2)}%)` : 'Sem rendimento registrado ainda'} tone={v.inv.totalYield >= 0 ? 'pos' : 'neg'} />
+        )}
         <Kpi label="Receitas do mês" value={<Money cents={v.real.income} />} sub={`Previsto: ${fmtMoney(v.plan.income)}`} tone="pos" />
         <Kpi label="Despesas do mês" value={<Money cents={v.real.expense} />} sub={`Previsto: ${fmtMoney(v.plan.expense)}`} tone="neg" />
         <Kpi label="Resultado do mês" value={<Money cents={v.real.result} tone="auto" />} sub={`Previsto: ${fmtMoney(v.plan.income - v.plan.expense)}`} />
@@ -67,7 +71,7 @@ export default function Dashboard() {
       {isCurrent && (
         <div className="forecast">
           <span>Saldo previsto para o fim de {monthLabel(viewMonth).split(' ')[0].toLowerCase()}: <strong><Money cents={v.forecast.projected} tone="auto" /></strong></span>
-          <span className="muted">= saldo em contas {fmtMoney(v.forecast.assets)} + a receber {fmtMoney(v.forecast.receivable)} − a pagar {fmtMoney(v.forecast.payable)}</span>
+          <span className="muted">= saldo disponível {fmtMoney(v.forecast.assets)} + a receber {fmtMoney(v.forecast.receivable)} − a pagar {fmtMoney(v.forecast.payable)}{v.inv.rows.length > 0 ? ' (não conta o investido)' : ''}</span>
         </div>
       )}
       <div className="grid-2-1">
