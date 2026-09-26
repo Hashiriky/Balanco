@@ -5,7 +5,7 @@ import { AccountName, CategoryLabel, StatusTag, TxAmount, useLookups } from '@/c
 import { AccountSelect, CategorySelect, WEEKDAY_OPTIONS } from '@/components/selects.jsx';
 import { Choice, Field, Icon, Modal, Money, MoneyInput, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
-import { accountBalance, invoiceMonthOf } from '@/lib/domain.js';
+import { accountBalance, invoiceMonthOf, isPaid } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
@@ -132,6 +132,28 @@ export function AccountViewDialog({ account, onClose }) {
   const today = todayISO();
   const bal = accountBalance(account, data.transactions, { upTo: today, includePending: false });
   const isCard = account.type === 'credit';
+  const isInvestment = account.type === 'investment';
+  const yieldTxs = isInvestment ? data.transactions.filter((t) => t.accountId === account.id && t.isYield && isPaid(t)) : [];
+  const totalYield = yieldTxs.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+  const principal = bal - totalYield;
+  const yieldPct = principal > 0 ? (totalYield / principal) * 100 : null;
+  const lastUpdate = yieldTxs.reduce((max, t) => (!max || t.date > max ? t.date : max), null);
+  /* histórico: quanto rendeu em cada atualização e o % acumulado até aquela data */
+  const history = useMemo(() => {
+    if (!isInvestment) return [];
+    let cum = 0;
+    return [...yieldTxs]
+      .sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+      .map((t) => {
+        const delta = t.type === 'income' ? t.amount : -t.amount;
+        cum += delta;
+        const balAt = accountBalance(account, data.transactions, { upTo: t.date, includePending: false });
+        const principalAt = balAt - cum;
+        const pct = principalAt > 0 ? (cum / principalAt) * 100 : null;
+        return { id: t.id, date: t.date, delta, cum, pct };
+      })
+      .reverse();
+  }, [yieldTxs, account, data.transactions]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Modal title="Detalhes da conta" size="sm" onClose={onClose}
       footer={(close) => (<>
@@ -147,8 +169,71 @@ export function AccountViewDialog({ account, onClose }) {
           <div><dt>Fechamento</dt><dd>Dia {account.closingDay}</dd></div>
           <div><dt>Vencimento</dt><dd>Dia {account.dueDay}</dd></div>
         </>)}
+        {isInvestment && (<>
+          <div><dt>Total investido</dt><dd>{fmtMoney(principal)}</dd></div>
+          <div><dt>Rendimento acumulado</dt><dd className={totalYield >= 0 ? 'pos' : 'neg'}>{fmtMoney(totalYield)}{yieldPct !== null ? ` (${yieldPct >= 0 ? '+' : ''}${yieldPct.toFixed(2)}%)` : ''}</dd></div>
+          {lastUpdate && <div><dt>Última atualização</dt><dd>{fmtDate(lastUpdate)}</dd></div>}
+        </>)}
         {account.archived && <div><dt>Situação</dt><dd><Tag tone="warn">Arquivada</Tag></dd></div>}
       </dl>
+      {isInvestment && !!history.length && (
+        <div className="yield-history">
+          <h3 className="section-title">Histórico de rendimento</h3>
+          <ul className="yield-history-list">
+            {history.map((h) => (
+              <li key={h.id}>
+                <span>{fmtDate(h.date)}</span>
+                <span className={h.delta >= 0 ? 'pos' : 'neg'}>{h.delta >= 0 ? '+' : ''}{fmtMoney(h.delta)}</span>
+                <span className="muted">{h.pct !== null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(2)}% acum.` : '—'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {isInvestment && !account.archived && (
+        <button type="button" className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { onClose(); setTimeout(() => ui.open('yieldUpdate', { account, currentBalance: bal }), 0); }}>
+          <Icon name="up" size={16} />Atualizar rendimento
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+/* ---------- Rendimento (conta de investimento) ---------- */
+export function YieldUpdateDialog({ account, currentBalance, onClose }) {
+  const { upsert } = useStore();
+  const [mode, setMode] = useState('total'); // 'total' | 'yield'
+  const [total, setTotal] = useState(centsToField(currentBalance));
+  const [yieldAmount, setYieldAmount] = useState('');
+  const [loss, setLoss] = useState(false);
+  const [date, setDate] = useState(todayISO());
+  const [errors, setErrors] = useState({});
+  const delta = mode === 'total' ? parseMoney(total) - currentBalance : parseMoney(yieldAmount) * (loss ? -1 : 1);
+  return (
+    <Modal title="Atualizar rendimento" size="sm" onClose={onClose}
+      onSubmit={(close) => {
+        const e = {};
+        if (!isValidISO(date)) e.date = 'Data inválida.';
+        if (mode === 'total' && !(parseMoney(total) >= 0)) e.total = 'Informe o valor atual.';
+        if (mode === 'yield' && !(parseMoney(yieldAmount) > 0)) e.yieldAmount = 'Informe quanto rendeu.';
+        setErrors(e); if (hasErrors(e)) return;
+        if (delta === 0) { toast('Sem variação desde a última atualização.'); close(); return; }
+        upsert('transactions', { id: uid(), type: delta > 0 ? 'income' : 'expense', amount: Math.abs(delta), date, description: 'Rendimento', accountId: account.id, toAccountId: null, categoryId: null, isYield: true, notes: null, status: 'paid', createdAt: new Date().toISOString() });
+        toast('Rendimento registrado.'); close();
+      }}
+      footer={(close) => (<><span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button><button type="submit" className="btn btn-primary">Salvar</button></>)}>
+      <p className="muted">Saldo atual em <strong>{account.name}</strong>: {fmtMoney(currentBalance)}</p>
+      <Choice name="yieldMode" value={mode} onChange={setMode} options={[{ value: 'total', label: 'Sei o valor total atual' }, { value: 'yield', label: 'Sei quanto rendeu' }]} />
+      {mode === 'total'
+        ? <Field label="Valor total hoje" error={errors.total}><MoneyInput value={total} onChange={setTotal} data-autofocus aria-label="Valor total hoje" /></Field>
+        : (<>
+            <div className="grid-2">
+              <Field label="Quanto rendeu" error={errors.yieldAmount}><MoneyInput value={yieldAmount} onChange={setYieldAmount} data-autofocus aria-label="Quanto rendeu" /></Field>
+              <label className="check inline"><input type="checkbox" checked={loss} onChange={(e) => setLoss(e.target.checked)} /><span>Foi perda (rendeu negativo)</span></label>
+            </div>
+          </>)}
+      <Field label="Data" error={errors.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
+      {parseMoney(mode === 'total' ? total : yieldAmount) > 0 && <p className="help">Rendimento calculado: <strong className={delta >= 0 ? 'pos' : 'neg'}>{fmtMoney(delta)}</strong></p>}
     </Modal>
   );
 }

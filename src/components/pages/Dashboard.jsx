@@ -11,6 +11,7 @@ import { ACCOUNT_TYPES } from '@/lib/defaults.js';
 import { fmtDate, fmtMoney, monthKey, monthLabel, sum, todayISO } from '@/lib/util.js';
 
 const NEXT_LIMIT_KEY = 'balanco.nextLimit';
+
 export default function Dashboard() {
   const { data, viewMonth } = useStore();
   const ui = useUI();

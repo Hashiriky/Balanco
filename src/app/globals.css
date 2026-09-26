@@ -134,6 +134,11 @@ a { color: var(--primary); text-decoration: none; } a:hover { text-decoration: u
 .view-grid .span2 { grid-column: 1 / -1; }
 .view-grid dt { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
 .view-grid dd { margin: 0; font-weight: 550; }
+.yield-history { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.yield-history .section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin: 0 0 8px; }
+.yield-history-list { list-style: none; margin: 0; padding: 0; max-height: 30vh; overflow-y: auto; display: grid; gap: 6px; }
+.yield-history-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; padding: 4px 0; }
+.yield-history-list li span:first-child { color: var(--muted); flex: none; }
 
 .cat-select-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
 .cat-select-value { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
