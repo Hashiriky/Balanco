@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
 import { Card, Empty, Icon, Kpi, Money, PageHeader, ProgressBar, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
-import { accountsOverview, cardAvailable, cardInvoice, cardUsed, isCredit } from '@/lib/domain.js';
+import { accountsOverview, accountYield, cardAvailable, cardInvoice, cardUsed, isCredit } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { fmtDate, fmtMoney, monthLabel, shiftMonth, todayISO } from '@/lib/util.js';
@@ -45,10 +45,13 @@ export default function Accounts() {
   const ui = useUI();
   const today = todayISO();
   const [showArchived, setShowArchived] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('all');
   const ov = useMemo(() => accountsOverview(data.accounts, data.transactions, today), [data.accounts, data.transactions, today]);
   const archived = data.accounts.filter((a) => a.archived);
-  const rows = showArchived ? [...ov.rows, ...archived.map((account) => ({ account, current: 0, forecast: 0 }))] : ov.rows;
+  const allRows = showArchived ? [...ov.rows, ...archived.map((account) => ({ account, current: 0, forecast: 0 }))] : ov.rows;
+  const rows = typeFilter === 'all' ? allRows : allRows.filter((r) => r.account.type === typeFilter);
   const cards = data.accounts.filter((a) => isCredit(a) && !a.archived);
+  const typeCounts = useMemo(() => { const c = {}; allRows.forEach((r) => { c[r.account.type] = (c[r.account.type] || 0) + 1; }); return c; }, [allRows]);
   return (
     <>
       <PageHeader title="Contas e cartões" subtitle="Saldos e faturas"><button type="button" className="btn btn-primary" onClick={() => ui.open('account')}>Nova conta</button></PageHeader>
@@ -57,19 +60,32 @@ export default function Accounts() {
         <Kpi label="Faturas de cartão em aberto" value={<Money cents={-ov.cards} tone={ov.cards < 0 ? 'expense' : undefined} />} sub="Dívida total nos cartões" />
         <Kpi label="Patrimônio líquido" value={<Money cents={ov.netWorth} tone="auto" />} sub="Saldos menos cartões" />
       </div>
-      <Card title="Contas" actions={archived.length > 0 && <label className="check inline"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /><span>Mostrar arquivadas ({archived.length})</span></label>} flush>
+      <Card title="Contas" actions={
+        <div className="acc-filters">
+          <select className="select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filtrar por tipo" style={{ width: 'auto' }}>
+            <option value="all">Todos os tipos</option>
+            {Object.entries(ACCOUNT_TYPES).filter(([k]) => typeCounts[k]).map(([k, v]) => <option key={k} value={k}>{v} ({typeCounts[k]})</option>)}
+          </select>
+          {archived.length > 0 && <label className="check inline"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /><span>Mostrar arquivadas ({archived.length})</span></label>}
+        </div>
+      } flush>
         {rows.length ? (
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Nome</th><th>Tipo</th><th className="num">Saldo atual</th><th className="num">Previsto no fim do mês</th><th /></tr></thead>
-            <tbody>{rows.map((r) => (
-              <tr key={r.account.id} className={r.account.archived ? 'muted click' : 'click'} onClick={() => ui.open('accountView', { account: r.account })}>
-                <td>{r.account.name}{r.account.archived && <Tag>Arquivada</Tag>}</td><td>{ACCOUNT_TYPES[r.account.type]}{isCredit(r.account) && <small className="muted"> · limite {fmtMoney(r.account.limit)}</small>}</td>
-                <td className="num"><Money cents={r.current} tone="auto" /></td><td className="num"><Money cents={r.forecast} tone="auto" /></td>
-                <td className="w-act"><button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); ui.open('account', { account: r.account }); }}>Editar</button></td>
-              </tr>
-            ))}</tbody>
+            <tbody>{rows.map((r) => {
+              const isInv = r.account.type === 'investment';
+              const y = isInv ? accountYield(r.account, data.transactions, today) : null;
+              return (
+                <tr key={r.account.id} className={r.account.archived ? 'muted click' : 'click'} onClick={() => ui.open('accountView', { account: r.account })}>
+                  <td>{isInv && <Icon name="chart" size={14} className="acc-type-icon" />}{r.account.name}{r.account.archived && <Tag>Arquivada</Tag>}</td>
+                  <td>{ACCOUNT_TYPES[r.account.type]}{isCredit(r.account) && <small className="muted"> · limite {fmtMoney(r.account.limit)}</small>}{isInv && y && y.pct !== null && <small className={y.totalYield >= 0 ? 'pos' : 'neg'}> · {y.pct >= 0 ? '+' : ''}{y.pct.toFixed(2)}%</small>}</td>
+                  <td className="num"><Money cents={r.current} tone="auto" /></td><td className="num"><Money cents={r.forecast} tone="auto" /></td>
+                  <td className="w-act"><button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); ui.open('account', { account: r.account }); }}>Editar</button></td>
+                </tr>
+              );
+            })}</tbody>
           </table></div>
-        ) : <Empty title="Nenhuma conta cadastrada" text="Crie uma conta para começar a lançar." action={<button type="button" className="btn btn-primary" onClick={() => ui.open('account')}>Nova conta</button>} />}
+        ) : <Empty title="Nenhuma conta encontrada" text="Tente outro filtro, ou crie uma conta pra começar." action={<button type="button" className="btn btn-primary" onClick={() => ui.open('account')}>Nova conta</button>} />}
       </Card>
       {cards.map((c) => <CardPanel key={c.id} card={c} />)}
     </>

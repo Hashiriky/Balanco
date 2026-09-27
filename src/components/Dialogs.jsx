@@ -5,7 +5,7 @@ import { AccountName, CategoryLabel, StatusTag, TxAmount, useLookups } from '@/c
 import { AccountSelect, CategorySelect, WEEKDAY_OPTIONS } from '@/components/selects.jsx';
 import { Choice, Field, Icon, Modal, Money, MoneyInput, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
-import { accountBalance, invoiceMonthOf, isPaid } from '@/lib/domain.js';
+import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, invoiceMonthOf } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
@@ -126,6 +126,7 @@ export function TxViewDialog({ tx, onClose }) {
     </Modal>
   );
 }
+const YIELD_HISTORY_LIMIT = 8;
 export function AccountViewDialog({ account, onClose }) {
   const { data } = useStore();
   const ui = useUI();
@@ -133,27 +134,10 @@ export function AccountViewDialog({ account, onClose }) {
   const bal = accountBalance(account, data.transactions, { upTo: today, includePending: false });
   const isCard = account.type === 'credit';
   const isInvestment = account.type === 'investment';
-  const yieldTxs = isInvestment ? data.transactions.filter((t) => t.accountId === account.id && t.isYield && isPaid(t)) : [];
-  const totalYield = yieldTxs.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
-  const principal = bal - totalYield;
-  const yieldPct = principal > 0 ? (totalYield / principal) * 100 : null;
-  const lastUpdate = yieldTxs.reduce((max, t) => (!max || t.date > max ? t.date : max), null);
-  /* histórico: quanto rendeu em cada atualização e o % acumulado até aquela data */
-  const history = useMemo(() => {
-    if (!isInvestment) return [];
-    let cum = 0;
-    return [...yieldTxs]
-      .sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
-      .map((t) => {
-        const delta = t.type === 'income' ? t.amount : -t.amount;
-        cum += delta;
-        const balAt = accountBalance(account, data.transactions, { upTo: t.date, includePending: false });
-        const principalAt = balAt - cum;
-        const pct = principalAt > 0 ? (cum / principalAt) * 100 : null;
-        return { id: t.id, date: t.date, delta, cum, pct };
-      })
-      .reverse();
-  }, [yieldTxs, account, data.transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { totalYield, principal, pct: yieldPct, lastUpdate } = isInvestment ? accountYield(account, data.transactions, today) : {};
+  const rate = useMemo(() => (isInvestment ? accountYieldRate(account, data.transactions, today) : null), [isInvestment, account, data.transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fullHistory = useMemo(() => (isInvestment ? accountYieldHistory(account, data.transactions) : []), [isInvestment, account, data.transactions]);
+  const history = fullHistory.slice(0, YIELD_HISTORY_LIMIT);
   return (
     <Modal title="Detalhes da conta" size="sm" onClose={onClose}
       footer={(close) => (<>
@@ -172,10 +156,15 @@ export function AccountViewDialog({ account, onClose }) {
         {isInvestment && (<>
           <div><dt>Total investido</dt><dd>{fmtMoney(principal)}</dd></div>
           <div><dt>Rendimento acumulado</dt><dd className={totalYield >= 0 ? 'pos' : 'neg'}>{fmtMoney(totalYield)}{yieldPct !== null ? ` (${yieldPct >= 0 ? '+' : ''}${yieldPct.toFixed(2)}%)` : ''}</dd></div>
+          {rate && (<>
+            <div><dt>Média diária</dt><dd className={rate.daily >= 0 ? 'pos' : 'neg'}>{fmtMoney(rate.daily)}</dd></div>
+            <div><dt>Média mensal</dt><dd className={rate.monthly >= 0 ? 'pos' : 'neg'}>{fmtMoney(rate.monthly)}</dd></div>
+          </>)}
           {lastUpdate && <div><dt>Última atualização</dt><dd>{fmtDate(lastUpdate)}</dd></div>}
         </>)}
         {account.archived && <div><dt>Situação</dt><dd><Tag tone="warn">Arquivada</Tag></dd></div>}
       </dl>
+      {rate && <p className="muted" style={{ marginTop: -6 }}>Médias calculadas desde {fmtDate(rate.since)} ({rate.days} dias) — vale mais como estimativa do que número exato, já que o rendimento real varia dia a dia.</p>}
       {isInvestment && !!history.length && (
         <div className="yield-history">
           <h3 className="section-title">Histórico de rendimento</h3>
@@ -188,6 +177,7 @@ export function AccountViewDialog({ account, onClose }) {
               </li>
             ))}
           </ul>
+          {fullHistory.length > YIELD_HISTORY_LIMIT && <p className="muted" style={{ fontSize: 12 }}>+ {fullHistory.length - YIELD_HISTORY_LIMIT} atualizações mais antigas não exibidas aqui.</p>}
         </div>
       )}
       {isInvestment && !account.archived && (
@@ -388,7 +378,7 @@ export function AccountDialog({ account, onClose }) {
       <Field label="Nome" error={errors.name}><input className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Banco X, Carteira, Cartão Y" data-autofocus aria-label="Nome" /></Field>
       <Field label="Tipo"><select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">{Object.entries(ACCOUNT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
       <div className="grid-2">
-        <Field label={credit ? 'Dívida atual do cartão' : 'Saldo inicial'} help={credit ? 'Compras anteriores ainda não pagas (deixe zerado se não houver).' : 'Quanto havia na conta antes do primeiro lançamento.'}><MoneyInput value={balance} onChange={setBalance} aria-label="Saldo inicial" /></Field>
+        <Field label={credit ? 'Dívida atual do cartão' : 'Saldo inicial'} help={credit ? 'Compras anteriores ainda não pagas (deixe zerado se não houver).' : type === 'investment' && editing ? 'Só pra corrigir o ponto de partida. Pra aportar mais dinheiro depois, lance uma transferência — editar aqui mistura com o rendimento já calculado.' : 'Quanto havia na conta antes do primeiro lançamento.'}><MoneyInput value={balance} onChange={setBalance} aria-label="Saldo inicial" /></Field>
         <label className="check inline"><input type="checkbox" checked={negative} onChange={(e) => setNegative(e.target.checked)} /><span>Saldo negativo</span></label>
       </div>
       {credit && (<>

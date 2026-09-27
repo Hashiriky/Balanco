@@ -40,15 +40,43 @@ export function accountsOverview(accounts, txs, today = todayISO()) {
 }
 
 /* ---------- Investimentos ---------- */
+const yieldTxsOf = (account, txs) => txs.filter((t) => t.accountId === account.id && t.isYield && isPaid(t));
+const yieldDelta = (t) => (t.type === 'income' ? t.amount : -t.amount);
 /** saldo, total investido (principal) e rendimento acumulado (R$ e %) de UMA conta de investimento */
 export function accountYield(account, txs, today = todayISO()) {
   const balance = accountBalance(account, txs, { upTo: today, includePending: false });
-  const yieldTxs = txs.filter((t) => t.accountId === account.id && t.isYield && isPaid(t));
-  const totalYield = sum(yieldTxs, (t) => (t.type === 'income' ? t.amount : -t.amount));
+  const yTxs = yieldTxsOf(account, txs);
+  const totalYield = sum(yTxs, yieldDelta);
   const principal = balance - totalYield;
   const pct = principal > 0 ? (totalYield / principal) * 100 : null;
-  const lastUpdate = yieldTxs.reduce((max, t) => (!max || t.date > max ? t.date : max), null);
+  const lastUpdate = yTxs.reduce((max, t) => (!max || t.date > max ? t.date : max), null);
   return { balance, totalYield, principal, pct, lastUpdate };
+}
+/** lista de atualizações de rendimento, mais recente primeiro, com o % acumulado até cada data */
+export function accountYieldHistory(account, txs) {
+  let cum = 0;
+  return [...yieldTxsOf(account, txs)]
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    .map((t) => {
+      const delta = yieldDelta(t); cum += delta;
+      const balAt = accountBalance(account, txs, { upTo: t.date, includePending: false });
+      const principalAt = balAt - cum;
+      return { id: t.id, date: t.date, delta, cum, pct: principalAt > 0 ? (cum / principalAt) * 100 : null };
+    })
+    .reverse();
+}
+/** rendimento acumulado no fim de cada um dos últimos N meses (pro gráfico de evolução) */
+export function accountYieldSeries(account, txs, endKey, n) {
+  return Array.from({ length: n }, (_, i) => { const key = shiftMonth(endKey, i - n + 1); return { key, value: sum(yieldTxsOf(account, txs).filter((t) => t.date <= lastDayOfMonth(key)), yieldDelta) }; });
+}
+/** média diária e mensal de rendimento, desde a primeira atualização registrada */
+export function accountYieldRate(account, txs, today = todayISO()) {
+  const yTxs = yieldTxsOf(account, txs);
+  if (!yTxs.length) return null;
+  const since = yTxs.reduce((min, t) => (!min || t.date < min ? t.date : min), null);
+  const days = Math.max(1, diffDays(since, today));
+  const daily = sum(yTxs, yieldDelta) / days;
+  return { daily, monthly: daily * 30, since, days };
 }
 /** o mesmo, somado entre TODAS as contas de investimento (pro Painel) */
 export function investmentsOverview(accounts, txs, today = todayISO()) {

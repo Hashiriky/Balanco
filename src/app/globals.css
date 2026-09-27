@@ -162,6 +162,8 @@ code { padding: 1px 6px; border-radius: 4px; background: var(--border-soft); fon
 .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 12.5px; } .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; } .sw.inc { background: #2f9e6d; } .sw.exp { background: #d0473b; }
 .hbars { display: grid; gap: 12px; } .hbar-top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; } .budget-mini { display: grid; gap: 4px; margin-bottom: 12px; } .budget-mini > div:first-child { display: flex; justify-content: space-between; gap: 8px; }
 .card-panel .inv-month { min-width: 130px; text-align: center; } .inv-actions { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin: 14px 0; } .inv-actions > span { flex: 1 1 220px; margin-right: auto; }
+.acc-filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.acc-type-icon { vertical-align: -2px; margin-right: 6px; color: var(--muted); }
 
 /* janelas e avisos */
 dialog.modal { border: 1px solid var(--border); padding: 0; margin: auto; border-radius: 8px; background: var(--surface); color: var(--text); width: min(560px, calc(100vw - 24px)); max-height: 92vh; box-shadow: 0 12px 40px rgba(16, 24, 40, .22); overflow: hidden; }
