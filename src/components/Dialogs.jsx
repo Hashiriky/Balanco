@@ -128,7 +128,7 @@ export function TxViewDialog({ tx, onClose }) {
 }
 const YIELD_HISTORY_LIMIT = 8;
 export function AccountViewDialog({ account, onClose }) {
-  const { data } = useStore();
+  const { data, remove, upsert } = useStore();
   const ui = useUI();
   const today = todayISO();
   const bal = accountBalance(account, data.transactions, { upTo: today, includePending: false });
@@ -138,6 +138,13 @@ export function AccountViewDialog({ account, onClose }) {
   const rate = useMemo(() => (isInvestment ? accountYieldRate(account, data.transactions, today) : null), [isInvestment, account, data.transactions]); // eslint-disable-line react-hooks/exhaustive-deps
   const fullHistory = useMemo(() => (isInvestment ? accountYieldHistory(account, data.transactions) : []), [isInvestment, account, data.transactions]);
   const history = fullHistory.slice(0, YIELD_HISTORY_LIMIT);
+  const deleteYield = async (h) => {
+    const item = data.transactions.find((t) => t.id === h.id); if (!item) return;
+    const ok = await ui.confirm({ title: 'Excluir atualização', danger: true, okLabel: 'Excluir', message: `O rendimento de ${fmtMoney(h.delta)} em ${fmtDate(h.date)} será excluído e o saldo volta ao que era antes dele.` });
+    if (!ok) return;
+    const removed = remove('transactions', [item]);
+    toast('Atualização excluída.', { ttl: 6000, action: { label: 'Desfazer', run: () => upsert('transactions', removed) } });
+  };
   return (
     <Modal title="Detalhes da conta" size="sm" onClose={onClose}
       footer={(close) => (<>
@@ -174,6 +181,7 @@ export function AccountViewDialog({ account, onClose }) {
                 <span>{fmtDate(h.date)}</span>
                 <span className={h.delta >= 0 ? 'pos' : 'neg'}>{h.delta >= 0 ? '+' : ''}{fmtMoney(h.delta)}</span>
                 <span className="muted">{h.pct !== null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(2)}% acum.` : '—'}</span>
+                <button type="button" className="icon-btn" aria-label="Excluir atualização" onClick={() => deleteYield(h)}><Icon name="trash" size={15} /></button>
               </li>
             ))}
           </ul>
@@ -191,19 +199,22 @@ export function AccountViewDialog({ account, onClose }) {
 
 /* ---------- Rendimento (conta de investimento) ---------- */
 export function YieldUpdateDialog({ account, currentBalance, onClose }) {
-  const { upsert } = useStore();
+  const { upsert, data } = useStore();
   const [mode, setMode] = useState('total'); // 'total' | 'yield'
   const [total, setTotal] = useState(centsToField(currentBalance));
   const [yieldAmount, setYieldAmount] = useState('');
   const [loss, setLoss] = useState(false);
   const [date, setDate] = useState(todayISO());
   const [errors, setErrors] = useState({});
-  const delta = mode === 'total' ? parseMoney(total) - currentBalance : parseMoney(yieldAmount) * (loss ? -1 : 1);
+  const today = todayISO();
+  /* o cálculo usa o saldo NA DATA escolhida (não o de hoje), senão lançar uma data antiga sai errado */
+  const balAtDate = accountBalance(account, data.transactions, { upTo: isValidISO(date) ? date : today, includePending: false });
+  const delta = mode === 'total' ? parseMoney(total) - balAtDate : parseMoney(yieldAmount) * (loss ? -1 : 1);
   return (
     <Modal title="Atualizar rendimento" size="sm" onClose={onClose}
       onSubmit={(close) => {
         const e = {};
-        if (!isValidISO(date)) e.date = 'Data inválida.';
+        if (!isValidISO(date)) e.date = 'Data inválida.'; else if (date > today) e.date = 'Rendimento é o que já aconteceu — a data não pode ser futura.';
         if (mode === 'total' && !(parseMoney(total) >= 0)) e.total = 'Informe o valor atual.';
         if (mode === 'yield' && !(parseMoney(yieldAmount) > 0)) e.yieldAmount = 'Informe quanto rendeu.';
         setErrors(e); if (hasErrors(e)) return;
@@ -212,17 +223,17 @@ export function YieldUpdateDialog({ account, currentBalance, onClose }) {
         toast('Rendimento registrado.'); close();
       }}
       footer={(close) => (<><span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button><button type="submit" className="btn btn-primary">Salvar</button></>)}>
-      <p className="muted">Saldo atual em <strong>{account.name}</strong>: {fmtMoney(currentBalance)}</p>
+      <p className="muted">Saldo em <strong>{account.name}</strong> {date === today ? 'hoje' : `em ${fmtDate(date)}`}: {fmtMoney(balAtDate)}</p>
       <Choice name="yieldMode" value={mode} onChange={setMode} options={[{ value: 'total', label: 'Sei o valor total atual' }, { value: 'yield', label: 'Sei quanto rendeu' }]} />
       {mode === 'total'
-        ? <Field label="Valor total hoje" error={errors.total}><MoneyInput value={total} onChange={setTotal} data-autofocus aria-label="Valor total hoje" /></Field>
+        ? <Field label="Valor total nessa data" error={errors.total}><MoneyInput value={total} onChange={setTotal} data-autofocus aria-label="Valor total nessa data" /></Field>
         : (<>
             <div className="grid-2">
               <Field label="Quanto rendeu" error={errors.yieldAmount}><MoneyInput value={yieldAmount} onChange={setYieldAmount} data-autofocus aria-label="Quanto rendeu" /></Field>
               <label className="check inline"><input type="checkbox" checked={loss} onChange={(e) => setLoss(e.target.checked)} /><span>Foi perda (rendeu negativo)</span></label>
             </div>
           </>)}
-      <Field label="Data" error={errors.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
+      <Field label="Data" error={errors.date}><input className="input" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
       {parseMoney(mode === 'total' ? total : yieldAmount) > 0 && <p className="help">Rendimento calculado: <strong className={delta >= 0 ? 'pos' : 'neg'}>{fmtMoney(delta)}</strong></p>}
     </Modal>
   );

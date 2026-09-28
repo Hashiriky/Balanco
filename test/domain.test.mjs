@@ -123,3 +123,67 @@ test('alertas do painel', () => {
   const al = D.buildAlerts({ accounts: [acc('cc'), card], txs: cardTx, recurrences: recs, budgets: [{ id: 'cat_lazer', categoryId: 'cat_lazer', amount: 1 }], categories: cats, today: '2026-09-15' });
   assert.ok(al.some((a) => a.id === 'late') && al.some((a) => a.id.startsWith('inv:card')));
 });
+
+/* ---------- Investimentos (rendimento) ---------- */
+const inv = acc('inv', { type: 'investment', initialBalance: 100000 });
+const yld = (id, amount, date, o = {}) => tx(id, { type: 'income', amount, date, accountId: 'inv', categoryId: null, isYield: true, description: 'Rendimento', ...o });
+test('rendimento: total, principal, % e aporte não vira rendimento', () => {
+  const txs = [yld('y1', 1000, '2026-09-05'), yld('y2', 2000, '2026-09-12'), tx('aporte', { type: 'income', amount: 50000, date: '2026-09-10', accountId: 'inv', categoryId: null })];
+  const y = D.accountYield(inv, txs, TODAY);
+  assert.equal(y.balance, 100000 + 1000 + 2000 + 50000); assert.equal(y.totalYield, 3000); assert.equal(y.principal, 150000);
+  assert.equal(y.pct.toFixed(2), '2.00'); assert.equal(y.lastUpdate, '2026-09-12');
+  assert.equal(D.accountYield(inv, [], TODAY).pct, 0);                      // sem registros: 0% e sem data
+  assert.equal(D.accountYield(inv, [], TODAY).lastUpdate, null);
+});
+test('rendimento negativo (perda) reduz o acumulado', () => {
+  const txs = [yld('y1', 5000, '2026-09-05'), yld('perda', 2000, '2026-09-12', { type: 'expense' })];
+  const y = D.accountYield(inv, txs, TODAY);
+  assert.equal(y.totalYield, 3000); assert.equal(y.balance, 103000);
+});
+test('rendimento: transferir entre investimentos mexe no principal, não no rendimento', () => {
+  const inv2 = acc('inv2', { type: 'investment' });
+  const txs = [yld('y1', 4000, '2026-09-05'), tx('mv', { type: 'transfer', amount: 30000, accountId: 'inv', toAccountId: 'inv2', categoryId: null, date: '2026-09-08' })];
+  const a = D.accountYield(inv, txs, TODAY), b = D.accountYield(inv2, txs, TODAY);
+  assert.equal(a.totalYield, 4000); assert.equal(a.principal, 100000 - 30000);
+  assert.equal(b.totalYield, 0); assert.equal(b.principal, 30000);
+});
+test('rendimento: data futura não infla o acumulado de hoje', () => {
+  const txs = [yld('y1', 1000, '2026-09-05'), yld('futuro', 9000, '2026-12-01')];
+  const y = D.accountYield(inv, txs, TODAY);
+  assert.equal(y.totalYield, 1000); assert.equal(y.principal, 100000);
+});
+test('rendimento: histórico (mais recente primeiro), série mensal e média diária/mensal', () => {
+  const txs = [yld('y1', 1000, '2026-08-20'), yld('y2', 3000, '2026-09-10')];
+  const h = D.accountYieldHistory(inv, txs);
+  assert.deepEqual(h.map((x) => [x.date, x.delta, x.cum]), [['2026-09-10', 3000, 4000], ['2026-08-20', 1000, 1000]]);
+  const s = D.accountYieldSeries(inv, txs, '2026-09', 3);
+  assert.deepEqual(s.map((p) => [p.key, p.value]), [['2026-07', 0], ['2026-08', 1000], ['2026-09', 4000]]);
+  const r = D.accountYieldRate(inv, txs, '2026-09-19');
+  assert.equal(r.days, 30); assert.equal(Math.round(r.daily), Math.round(4000 / 30)); assert.equal(Math.round(r.monthly), 4000);
+  assert.equal(D.accountYieldRate(inv, [], TODAY), null);
+});
+test('painel: investimento fica fora do saldo disponível e da previsão de fim de mês', () => {
+  const cc = acc('cc', { initialBalance: 200000 });
+  const ov = D.accountsOverview([cc, inv], [], TODAY);
+  assert.equal(ov.liquid, 200000); assert.equal(ov.invested, 100000); assert.equal(ov.assets, 300000); assert.equal(ov.netWorth, 300000);
+  const f = D.monthEndForecast({ accounts: [cc, inv], txs: [], recurrences: [], today: TODAY });
+  assert.equal(f.assets, 200000); assert.equal(f.projected, 200000);
+  const io = D.investmentsOverview([cc, inv], [yld('y1', 5000, '2026-09-05')], TODAY);
+  assert.equal(io.rows.length, 1); assert.equal(io.totalYield, 5000); assert.equal(io.balance, 105000);
+});
+test('rendimento não conta como entrada/gasto, mas continua no saldo da conta', () => {
+  const txs = [tx('sal', { type: 'income', amount: 300000, accountId: 'cc', categoryId: 'cat_receitas_salario' }), yld('y1', 5000, '2026-09-05'), yld('perda', 700, '2026-09-06', { type: 'expense' })];
+  assert.deepEqual(D.monthTotals(txs, '2026-09'), { income: 300000, expense: 0, result: 300000 });
+  assert.deepEqual(D.byCategory(txs, cats, { type: 'income' }).map((r) => r.amount), [300000]);
+  assert.equal(D.byCategory(txs, cats, { type: 'expense' }).length, 0);
+  assert.equal(D.categoryMonthTable(txs, cats, ['2026-09'], { type: 'income' }).total, 300000);
+  assert.equal(D.accountBalance(inv, txs, { upTo: TODAY }), 100000 + 5000 - 700);
+});
+test('lembrete: avisa se nunca registrou ou se faz 30+ dias sem conferir o rendimento', () => {
+  const ids = (txs) => D.buildAlerts({ accounts: [inv], txs, recurrences: [], budgets: [], categories: cats, today: TODAY }).filter((a) => a.id.startsWith('yield')).map((a) => a.text);
+  assert.match(ids([])[0], /Ainda não registrou/);
+  assert.equal(ids([yld('y1', 100, '2026-09-10')]).length, 0);
+  assert.match(ids([yld('y1', 100, '2026-08-10')])[0], /Faz 40 dias/);
+  const vazio = acc('zero', { type: 'investment', initialBalance: 0 });
+  assert.equal(D.buildAlerts({ accounts: [vazio], txs: [], recurrences: [], budgets: [], categories: cats, today: TODAY }).length, 0);
+});

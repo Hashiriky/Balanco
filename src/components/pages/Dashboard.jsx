@@ -34,7 +34,7 @@ export default function Dashboard() {
       cats: cats.map((c) => ({ id: c.categoryId, value: c.amount, label: idx.get(c.categoryId)?.name || 'Sem categoria', color: rootOf(c.categoryId, idx)?.color || '#94a3b8' })),
       next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
       buds: budgetRows({ budgets, txs, categories, key: viewMonth }).slice(0, 5),
-      recent: [...txs].filter(isPaid).sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8),
+      recent: [...txs].filter((t) => isPaid(t) && !t.isYield).sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8),
     };
   }, [data, viewMonth, today, nextLimit]);
 

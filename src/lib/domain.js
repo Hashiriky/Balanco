@@ -40,12 +40,13 @@ export function accountsOverview(accounts, txs, today = todayISO()) {
 }
 
 /* ---------- Investimentos ---------- */
-const yieldTxsOf = (account, txs) => txs.filter((t) => t.accountId === account.id && t.isYield && isPaid(t));
+const YIELD_CHECK_DAYS = 30;   // depois de quantos dias sem atualizar o Painel avisa
+const yieldTxsOf = (account, txs, upTo) => txs.filter((t) => t.accountId === account.id && t.isYield && isPaid(t) && (!upTo || t.date <= upTo));
 const yieldDelta = (t) => (t.type === 'income' ? t.amount : -t.amount);
 /** saldo, total investido (principal) e rendimento acumulado (R$ e %) de UMA conta de investimento */
 export function accountYield(account, txs, today = todayISO()) {
   const balance = accountBalance(account, txs, { upTo: today, includePending: false });
-  const yTxs = yieldTxsOf(account, txs);
+  const yTxs = yieldTxsOf(account, txs, today);
   const totalYield = sum(yTxs, yieldDelta);
   const principal = balance - totalYield;
   const pct = principal > 0 ? (totalYield / principal) * 100 : null;
@@ -71,7 +72,7 @@ export function accountYieldSeries(account, txs, endKey, n) {
 }
 /** média diária e mensal de rendimento, desde a primeira atualização registrada */
 export function accountYieldRate(account, txs, today = todayISO()) {
-  const yTxs = yieldTxsOf(account, txs);
+  const yTxs = yieldTxsOf(account, txs, today);
   if (!yTxs.length) return null;
   const since = yTxs.reduce((min, t) => (!min || t.date < min ? t.date : min), null);
   const days = Math.max(1, diffDays(since, today));
@@ -91,7 +92,7 @@ export const inMonth = (t, key) => t.date.startsWith(key);
 export function monthTotals(txs, key, { includePending = false } = {}) {
   let income = 0, expense = 0;
   for (const t of txs) {
-    if (!inMonth(t, key) || t.type === 'transfer') continue;
+    if (t.isYield || !inMonth(t, key) || t.type === 'transfer') continue;
     if (!includePending && !isPaid(t)) continue;
     if (t.type === 'income') income += t.amount; else expense += t.amount;
   }
@@ -107,7 +108,7 @@ export const categoryName = (id, idx) => idx.get(id)?.name || 'Sem categoria';
 export function byCategory(txs, categories, { type = 'expense', level = 'root', includePending = true } = {}) {
   const idx = categoryIndex(categories), map = new Map();
   for (const t of txs) {
-    if (t.type !== type || (!includePending && !isPaid(t))) continue;
+    if (t.isYield || t.type !== type || (!includePending && !isPaid(t))) continue;
     const c = idx.get(t.categoryId);
     const id = !c ? 'none' : level === 'root' ? (rootOf(t.categoryId, idx)?.id || 'none') : c.id;
     map.set(id, (map.get(id) || 0) + t.amount);
@@ -238,7 +239,7 @@ export function categoryMonthTable(txs, categories, keys, { type = 'expense', in
   const idx = categoryIndex(categories), cols = keys.length, pos = new Map(keys.map((k, i) => [k, i]));
   const cells = new Map(), add = (id, i, v) => { if (!cells.has(id)) cells.set(id, Array(cols).fill(0)); cells.get(id)[i] += v; };
   for (const t of txs) {
-    if (t.type !== type || (!includePending && !isPaid(t))) continue;
+    if (t.isYield || t.type !== type || (!includePending && !isPaid(t))) continue;
     const i = pos.get(t.date.slice(0, 7)); if (i === undefined) continue;
     const c = idx.get(t.categoryId);
     if (!c) { add('none', i, t.amount); continue; }
@@ -273,6 +274,13 @@ export function buildAlerts({ accounts, txs, recurrences, budgets, categories, t
   });
   const over = budgetRows({ budgets, txs, categories, key }).filter((r) => r.level === 'over');
   if (over.length) out.push({ id: 'budget', tone: 'warn', text: `${over.length} orçamento${over.length > 1 ? 's' : ''} estourado${over.length > 1 ? 's' : ''} este mês`, href: '/orcamento' });
+  accounts.filter((a) => a.type === 'investment' && !a.archived).forEach((a) => {
+    const y = accountYield(a, txs, today);
+    if (y.balance <= 0) return;
+    const days = y.lastUpdate ? diffDays(y.lastUpdate, today) : null;
+    if (days === null) out.push({ id: `yield:${a.id}`, tone: 'warn', text: `Ainda não registrou nenhum rendimento em ${a.name}`, href: '/contas' });
+    else if (days >= YIELD_CHECK_DAYS) out.push({ id: `yield:${a.id}`, tone: 'warn', text: `Faz ${days} dias que você não confere o rendimento de ${a.name}`, href: '/contas' });
+  });
   return out;
 }
 export { addDaysISO, isoDate, monthKey };

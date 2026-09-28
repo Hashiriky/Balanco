@@ -37,7 +37,7 @@ export default function Transactions() {
   const list = useMemo(() => {
     const nq = norm(q);
     const inCat = (t) => { if (!categoryId) return true; const c = lk.cat.get(categoryId); return t.categoryId === categoryId || (c && !c.parentId && rootOf(t.categoryId, lk.cat)?.id === categoryId); };
-    const l = data.transactions.filter((t) => t.date >= range[0] && t.date <= range[1] && (!accountId || t.accountId === accountId || t.toAccountId === accountId) && inCat(t) && (!type || t.type === type) && (!status || (status === 'paid' ? t.status !== 'pending' : t.status === 'pending'))
+    const l = data.transactions.filter((t) => !t.isYield && t.date >= range[0] && t.date <= range[1] && (!accountId || t.accountId === accountId || t.toAccountId === accountId) && inCat(t) && (!type || t.type === type) && (!status || (status === 'paid' ? t.status !== 'pending' : t.status === 'pending'))
       && (!nq || norm(`${t.description} ${categoryPath(t.categoryId, lk.cat)} ${t.notes || ''}`).includes(nq)));
     const dir = sort.dir === 'asc' ? 1 : -1;
     const key = { date: (t) => t.date, description: (t) => norm(t.description), amount: (t) => (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0) }[sort.by];
