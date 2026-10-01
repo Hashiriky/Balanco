@@ -40,10 +40,11 @@ Aplicativo web de **finanças pessoais** para o Brasil. Este documento define o 
 8. **Relatórios**: fluxo de caixa (12 meses), despesas por categoria, evolução do patrimônio, tabela mensal por categoria (com exportação CSV).
 9. **Importação de extrato**: CSV (com mapeamento de colunas) e OFX; regras de categorização; detecção de duplicados; revisão antes de importar.
 10. **Painel**: saldo em contas, receitas/despesas/resultado do mês (realizado e previsto), próximos vencimentos, alertas (atrasos, fatura a vencer), orçamento, últimas movimentações.
-11. **Dados**: backup completo (JSON) e restauração, exportação CSV, apagar todos os dados.
+11. **Carteira**: contas de investimento separadas das contas comuns; aporte/resgate (transferências), atualização de rendimento (individual ou de todos de uma vez), % acumulado e gráfico de 12 meses.
+12. **Dados**: backup completo (JSON) e restauração, exportação CSV, apagar todos os dados.
 
 ### Versão 2 (planejada)
-Metas de poupança ligadas a contas · Carteira de investimentos com cotações · Anexos (comprovantes) · Etiquetas e centros de custo · Conciliação bancária (marcar "conferido") · Orçamento por mês (com sobra acumulada) · Lembretes por e-mail · Relatório em PDF · Multiusuário/compartilhar com família · Aplicativo instalável (PWA offline).
+Metas de poupança ligadas a contas · Cotações na carteira de investimentos · Anexos (comprovantes) · Etiquetas e centros de custo · Conciliação bancária (marcar "conferido") · Orçamento por mês (com sobra acumulada) · Lembretes por e-mail · Relatório em PDF · Multiusuário/compartilhar com família · Aplicativo instalável (PWA offline).
 
 ### Fora do escopo
 Multimoeda · Open Finance (integração direta com bancos) · Emissão de boletos/pagamentos · Declaração de imposto de renda.

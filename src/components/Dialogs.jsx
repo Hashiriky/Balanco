@@ -185,7 +185,7 @@ export function AccountViewDialog({ account, onClose }) {
               </li>
             ))}
           </ul>
-          {fullHistory.length > YIELD_HISTORY_LIMIT && <p className="muted" style={{ fontSize: 12 }}>+ {fullHistory.length - YIELD_HISTORY_LIMIT} atualizações mais antigas não exibidas aqui.</p>}
+          {fullHistory.length > YIELD_HISTORY_LIMIT && <p className="muted" style={{ fontSize: 13.5 }}>+ {fullHistory.length - YIELD_HISTORY_LIMIT} atualizações mais antigas não exibidas aqui.</p>}
         </div>
       )}
       {isInvestment && !account.archived && (
@@ -239,12 +239,53 @@ export function YieldUpdateDialog({ account, currentBalance, onClose }) {
   );
 }
 
+/* ---------- Rendimento de vários investimentos de uma vez ---------- */
+export function YieldBatchDialog({ onClose }) {
+  const { data, upsert } = useStore();
+  const today = todayISO();
+  const accs = data.accounts.filter((a) => a.type === 'investment' && !a.archived);
+  const [date, setDate] = useState(today);
+  const [vals, setVals] = useState({});
+  const [errors, setErrors] = useState({});
+  const at = isValidISO(date) ? date : today;
+  const rows = accs.map((a) => {
+    const bal = accountBalance(a, data.transactions, { upTo: at, includePending: false });
+    const filled = (vals[a.id] || '') !== '';
+    return { a, bal, filled, delta: filled ? parseMoney(vals[a.id]) - bal : 0 };
+  });
+  return (
+    <Modal title="Atualizar rendimentos" onClose={onClose}
+      onSubmit={(close) => {
+        const e = {};
+        if (!isValidISO(date)) e.date = 'Data inválida.'; else if (date > today) e.date = 'A data não pode ser futura.';
+        setErrors(e); if (hasErrors(e)) return;
+        const items = rows.filter((r) => r.filled && r.delta !== 0).map((r) => ({ id: uid(), type: r.delta > 0 ? 'income' : 'expense', amount: Math.abs(r.delta), date, description: 'Rendimento', accountId: r.a.id, toAccountId: null, categoryId: null, isYield: true, notes: null, status: 'paid', createdAt: new Date().toISOString() }));
+        if (!items.length) { toast('Nada mudou — nenhum valor diferente do saldo atual.'); close(); return; }
+        upsert('transactions', items);
+        toast(items.length === 1 ? 'Rendimento registrado.' : `${items.length} rendimentos registrados.`); close();
+      }}
+      footer={(close) => (<><span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button><button type="submit" className="btn btn-primary">Salvar</button></>)}>
+      <p className="muted">Digite o <strong>valor total de hoje</strong> de cada investimento (como aparece no app do banco/corretora). Deixe em branco o que não quiser atualizar — o rendimento é calculado sozinho.</p>
+      <Field label="Data" error={errors.date}><input className="input" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
+      <div className="batch-list">
+        {rows.map((r, i) => (
+          <div key={r.a.id} className="batch-row">
+            <div className="batch-name"><strong>{r.a.name}</strong><small className="muted">Saldo atual: {fmtMoney(r.bal)}</small></div>
+            <MoneyInput value={vals[r.a.id] || ''} onChange={(v) => setVals((x) => ({ ...x, [r.a.id]: v }))} data-autofocus={i === 0 ? true : undefined} aria-label={`Valor total de ${r.a.name}`} />
+            <span className={cn('batch-delta num', r.delta > 0 ? 'pos' : r.delta < 0 ? 'neg' : 'muted')}>{r.filled ? `${r.delta > 0 ? '+' : ''}${fmtMoney(r.delta)}` : '—'}</span>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 /* ---------- Lançamento ---------- */
 export function TxDialog({ tx, preset = {}, onClose }) {
   const { data, upsert, remove, setViewMonth } = useStore();
   const ui = useUI();
   const src = tx || preset, editing = !!tx;
-  const firstAccount = data.accounts.find((a) => !a.archived)?.id || '';
+  const firstAccount = (data.accounts.find((a) => !a.archived && a.type !== 'investment') || data.accounts.find((a) => !a.archived))?.id || '';
   const [type, setType] = useState(src.type || 'expense');
   const [description, setDescription] = useState(src.description || '');
   const [amount, setAmount] = useState(centsToField(src.amount));
@@ -259,7 +300,14 @@ export function TxDialog({ tx, preset = {}, onClose }) {
   const account = data.accounts.find((a) => a.id === accountId);
   const onCard = account?.type === 'credit';
   const cents = parseMoney(amount);
-  const changeType = (t) => { setType(t); setCategoryId(''); };
+  const changeType = (t) => {
+    setType(t); setCategoryId('');
+    /* investimento só entra em transferência (aporte/resgate); receita/despesa não */
+    if (t !== 'transfer') {
+      if (account?.type === 'investment') setAccountId(firstAccount);
+      setToAccountId('');
+    }
+  };
 
   const submit = (close) => {
     const e = {};
@@ -304,9 +352,9 @@ export function TxDialog({ tx, preset = {}, onClose }) {
         <Field label="Data" error={errors.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
       </div>
       <div className="grid-2">
-        <Field label={type === 'transfer' ? 'Conta de origem' : 'Conta'} error={errors.accountId}><AccountSelect value={accountId} onChange={setAccountId} aria-label="Conta" /></Field>
+        <Field label={type === 'transfer' ? 'Conta de origem' : 'Conta'} error={errors.accountId}><AccountSelect value={accountId} onChange={setAccountId} investments={type === 'transfer'} aria-label="Conta" /></Field>
         {type === 'transfer'
-          ? <Field label="Conta de destino" error={errors.toAccountId}><AccountSelect value={toAccountId} onChange={setToAccountId} exclude={[accountId]} aria-label="Conta de destino" /></Field>
+          ? <Field label="Conta de destino" error={errors.toAccountId}><AccountSelect value={toAccountId} onChange={setToAccountId} exclude={[accountId]} investments aria-label="Conta de destino" /></Field>
           : <Field label="Categoria" error={errors.categoryId}><CategorySelect type={type} value={categoryId} onChange={setCategoryId} aria-label="Categoria" /></Field>}
       </div>
       {onCard && type === 'expense' && isValidISO(date) && <p className="help">Esta compra entra na fatura de {monthLabel(invoiceMonthOf(date, account.closingDay || 1))}.</p>}
@@ -356,12 +404,12 @@ export function SettleDialog({ item, onClose }) {
 }
 
 /* ---------- Conta ---------- */
-export function AccountDialog({ account, onClose }) {
+export function AccountDialog({ account, presetType, onClose }) {
   const { data, upsert, remove } = useStore();
   const ui = useUI();
   const editing = !!account;
   const [name, setName] = useState(account?.name || '');
-  const [type, setType] = useState(account?.type || 'checking');
+  const [type, setType] = useState(account?.type || presetType || 'checking');
   const [balance, setBalance] = useState(centsToField(Math.abs(account?.initialBalance || 0)));
   const [negative, setNegative] = useState((account?.initialBalance || 0) < 0);
   const [limit, setLimit] = useState(centsToField(account?.limit));
@@ -371,7 +419,7 @@ export function AccountDialog({ account, onClose }) {
   const used = editing && data.transactions.some((t) => t.accountId === account.id || t.toAccountId === account.id);
   const credit = type === 'credit';
   return (
-    <Modal title={editing ? 'Editar conta' : 'Nova conta'} onClose={onClose}
+    <Modal title={editing ? (type === 'investment' ? 'Editar investimento' : 'Editar conta') : (type === 'investment' ? 'Novo investimento' : 'Nova conta')} onClose={onClose}
       onSubmit={(close) => {
         const e = {};
         if (!name.trim()) e.name = 'Informe o nome da conta.';
@@ -386,7 +434,7 @@ export function AccountDialog({ account, onClose }) {
         {editing && used && <button type="button" className="btn btn-secondary" onClick={() => { upsert('accounts', { ...account, archived: !account.archived }); close(); toast(account.archived ? 'Conta reativada.' : 'Conta arquivada.'); }}>{account.archived ? 'Reativar' : 'Arquivar'}</button>}
         <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button><button type="submit" className="btn btn-primary">Salvar</button>
       </>)}>
-      <Field label="Nome" error={errors.name}><input className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Banco X, Carteira, Cartão Y" data-autofocus aria-label="Nome" /></Field>
+      <Field label="Nome" error={errors.name}><input className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder={type === 'investment' ? 'Ex.: CDB Banco X, Tesouro Selic, Ações' : 'Ex.: Banco X, Carteira, Cartão Y'} data-autofocus aria-label="Nome" /></Field>
       <Field label="Tipo"><select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">{Object.entries(ACCOUNT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
       <div className="grid-2">
         <Field label={credit ? 'Dívida atual do cartão' : 'Saldo inicial'} help={credit ? 'Compras anteriores ainda não pagas (deixe zerado se não houver).' : type === 'investment' && editing ? 'Só pra corrigir o ponto de partida. Pra aportar mais dinheiro depois, lance uma transferência — editar aqui mistura com o rendimento já calculado.' : 'Quanto havia na conta antes do primeiro lançamento.'}><MoneyInput value={balance} onChange={setBalance} aria-label="Saldo inicial" /></Field>

@@ -6,9 +6,11 @@ import { useUI } from '@/lib/ui-context.jsx';
 import { Icon } from '@/components/ui.jsx';
 import { cn } from '@/lib/util.js';
 
-export function AccountSelect({ value, onChange, exclude = [], only, id, ...rest }) {
+/** Contas de investimento ficam fora da lista por padrão (têm a própria tela, a Carteira).
+ *  Passe `investments` pra incluí-las — usado nas transferências (aporte/resgate). */
+export function AccountSelect({ value, onChange, exclude = [], only, investments = false, id, ...rest }) {
   const { data } = useStore();
-  const list = data.accounts.filter((a) => (!a.archived || a.id === value) && !exclude.includes(a.id) && (!only || only(a)));
+  const list = data.accounts.filter((a) => a.id === value || ((!a.archived) && !exclude.includes(a.id) && (investments || a.type !== 'investment') && (!only || only(a))));
   return (
     <select className="select" id={id} value={value} onChange={(e) => onChange(e.target.value)} {...rest}>
       <option value="">Selecione…</option>

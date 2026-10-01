@@ -9,7 +9,7 @@ import { cn } from '@/lib/util.js';
 
 export const ITEMS = [
   { href: '/', label: 'Painel', icon: 'panel' }, { href: '/lancamentos', label: 'Lançamentos', icon: 'list' }, { href: '/agenda', label: 'Agenda', icon: 'calendar' },
-  { href: '/contas', label: 'Contas', icon: 'bank' }, { href: '/orcamento', label: 'Orçamento', icon: 'target' }, { href: '/relatorios', label: 'Relatórios', icon: 'chart' },
+  { href: '/contas', label: 'Contas', icon: 'bank' }, { href: '/carteira', label: 'Carteira', icon: 'trend' }, { href: '/orcamento', label: 'Orçamento', icon: 'target' }, { href: '/relatorios', label: 'Relatórios', icon: 'chart' },
 ];
 const MORE = [{ href: '/importar', label: 'Importar extrato', icon: 'upload' }, { href: '/ajustes', label: 'Ajustes', icon: 'file' }];
 const SYNC = { off: 'Somente neste aparelho', syncing: 'Sincronizando…', ok: 'Sincronizado', error: 'Erro de sincronização' };

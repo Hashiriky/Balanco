@@ -63,7 +63,7 @@ export default function Reports() {
           </Card>
         )}
         {tab === 'worth' && (<>
-          <Card title="Evolução do patrimônio líquido (fim de cada mês)"><LineChart points={worth.map((w) => ({ key: w.key, value: w.netWorth }))} /></Card>
+          <Card title="Evolução do patrimônio líquido (fim de cada mês)"><LineChart points={worth.map((w) => ({ key: w.key, value: w.netWorth }))} valueLabel="Patrimônio líquido" /></Card>
           <Card title="Detalhe" flush><div className="table-wrap"><table className="table"><thead><tr><th>Mês</th><th className="num">Saldo em contas</th><th className="num">Cartões</th><th className="num">Patrimônio</th></tr></thead>
             <tbody>{worth.map((w) => <tr key={w.key}><td>{monthLabel(w.key)}</td><td className="num"><Money cents={w.assets} /></td><td className="num"><Money cents={w.cards} tone="auto" /></td><td className="num"><Money cents={w.netWorth} tone="auto" /></td></tr>)}</tbody></table></div></Card>
         </>)}

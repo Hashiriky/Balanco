@@ -278,8 +278,8 @@ export function buildAlerts({ accounts, txs, recurrences, budgets, categories, t
     const y = accountYield(a, txs, today);
     if (y.balance <= 0) return;
     const days = y.lastUpdate ? diffDays(y.lastUpdate, today) : null;
-    if (days === null) out.push({ id: `yield:${a.id}`, tone: 'warn', text: `Ainda não registrou nenhum rendimento em ${a.name}`, href: '/contas' });
-    else if (days >= YIELD_CHECK_DAYS) out.push({ id: `yield:${a.id}`, tone: 'warn', text: `Faz ${days} dias que você não confere o rendimento de ${a.name}`, href: '/contas' });
+    if (days === null) out.push({ id: `yield:${a.id}`, tone: 'warn', text: `Ainda não registrou nenhum rendimento em ${a.name}`, href: '/carteira' });
+    else if (days >= YIELD_CHECK_DAYS) out.push({ id: `yield:${a.id}`, tone: 'warn', text: `Faz ${days} dias que você não confere o rendimento de ${a.name}`, href: '/carteira' });
   });
   return out;
 }
