@@ -19,6 +19,7 @@ export function cleanAccount(a) {
   const type = ACCOUNT_TYPES[a.type] ? a.type : 'checking';
   const out = { ...a, id: str(a.id) || uid(), name: str(a.name).trim(), type, initialBalance: int(a.initialBalance), archived: !!a.archived };
   if (type === 'credit') Object.assign(out, { limit: Math.max(0, int(a.limit)), closingDay: day(a.closingDay, 1), dueDay: day(a.dueDay, 10) });
+  if (type === 'credit') { const m = monthOrNull(a.initialInvoice); if (m) out.initialInvoice = m; else delete out.initialInvoice; }
   return out;
 }
 export function cleanCategory(c) {

@@ -1,10 +1,10 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
 import { Card, Empty, Icon, Kpi, Money, PageHeader, ProgressBar, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
-import { accountsOverview, cardAvailable, cardInvoice, cardUsed, isCredit } from '@/lib/domain.js';
+import { accountsOverview, cardAvailable, cardInvoice, cardOpeningDebt, cardUsed, isCredit, openingInvoiceKey } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { fmtDate, fmtMoney, monthLabel, shiftMonth, todayISO } from '@/lib/util.js';
@@ -12,11 +12,13 @@ import { fmtDate, fmtMoney, monthLabel, shiftMonth, todayISO } from '@/lib/util.
 const INV_STATUS = { open: ['Aberta', undefined], closed: ['Fechada', 'warn'], late: ['Vencida', 'danger'], paid: ['Paga', 'ok'], empty: ['Sem compras', undefined] };
 
 function CardPanel({ card }) {
-  const { data, viewMonth } = useStore();
+  const { data, viewMonth, upsert } = useStore();
   const ui = useUI();
   const lk = useLookups();
   const today = todayISO();
   const [key, setKey] = useState(viewMonth);
+  // cartão antigo com dívida inicial e sem mês definido: fixa na fatura vigente pra dívida não "andar" de mês
+  useEffect(() => { if (!card.initialInvoice && cardOpeningDebt(card) > 0) upsert('accounts', { ...card, initialInvoice: openingInvoiceKey(card, today) }); }, [card, today, upsert]);
   const inv = useMemo(() => cardInvoice(card, data.transactions, key, today), [card, data.transactions, key, today]);
   const used = cardUsed(card, data.transactions), avail = cardAvailable(card, data.transactions);
   const [label, tone] = INV_STATUS[inv.status];
@@ -32,9 +34,9 @@ function CardPanel({ card }) {
         <button type="button" className="btn btn-primary" disabled={inv.remaining <= 0} onClick={() => ui.open('payInvoice', { card, invoice: inv })}><Icon name="check" size={16} />Pagar fatura</button>
         <button type="button" className="btn btn-secondary" onClick={() => ui.open('tx', { preset: { type: 'expense', accountId: card.id } })}><Icon name="plus" size={16} />Lançar compra</button>
       </div>
-      {inv.items.length ? (
+      {inv.items.length || inv.opening ? (
         <div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th className="num">Valor</th></tr></thead>
-          <tbody>{inv.items.map((t) => <tr key={t.id} className="click" onClick={() => ui.open('txView', { tx: t })}><td className="w-date">{fmtDate(t.date)}</td><td>{t.description}</td><td><CategoryLabel id={t.categoryId} lk={lk} /></td><td className="num"><Money cents={t.type === 'income' ? -t.amount : t.amount} /></td></tr>)}</tbody></table></div>
+          <tbody>{inv.opening > 0 && <tr><td className="w-date">—</td><td>Dívida anterior do cartão (saldo inicial)</td><td /><td className="num"><Money cents={inv.opening} /></td></tr>}{inv.items.map((t) => <tr key={t.id} className="click" onClick={() => ui.open('txView', { tx: t })}><td className="w-date">{fmtDate(t.date)}</td><td>{t.description}</td><td><CategoryLabel id={t.categoryId} lk={lk} /></td><td className="num"><Money cents={t.type === 'income' ? -t.amount : t.amount} /></td></tr>)}</tbody></table></div>
       ) : <Empty title="Sem compras nesta fatura" />}
       {inv.payments.length > 0 && <p className="muted">Pagamentos: {inv.payments.map((p) => `${fmtDate(p.date)} — ${fmtMoney(p.amount)}`).join(' · ')}</p>}
     </Card>

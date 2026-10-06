@@ -187,3 +187,16 @@ test('lembrete: avisa se nunca registrou ou se faz 30+ dias sem conferir o rendi
   const vazio = acc('zero', { type: 'investment', initialBalance: 0 });
   assert.equal(D.buildAlerts({ accounts: [vazio], txs: [], recurrences: [], budgets: [], categories: cats, today: TODAY }).length, 0);
 });
+
+test('cartão: dívida inicial (sem lançamentos) entra na fatura, pode ser paga e gera aviso de fechamento', () => {
+  const c = acc('cartaoDivida', { type: 'credit', limit: 500000, closingDay: 6, dueDay: 20, initialBalance: -120000, initialInvoice: '2026-10' });
+  const inv = D.cardInvoice(c, [], '2026-10', '2026-10-06');
+  assert.equal(inv.opening, 120000); assert.equal(inv.total, 120000); assert.equal(inv.remaining, 120000); assert.notEqual(inv.status, 'empty');
+  assert.equal(D.cardInvoice(c, [], '2026-11', '2026-10-06').total, 0);   // não repete em outros meses
+  const fechada = D.cardInvoice(c, [], '2026-10', '2026-10-07');
+  assert.equal(fechada.status, 'closed');
+  const pay = tx('pagto', { type: 'transfer', accountId: 'cc', toAccountId: 'cartaoDivida', amount: 120000, invoiceMonth: '2026-10', categoryId: null, date: '2026-10-08' });
+  assert.equal(D.cardInvoice(c, [pay], '2026-10', '2026-10-08').status, 'paid');
+  const al = D.buildAlerts({ accounts: [c], txs: [], recurrences: [], budgets: [], categories: [], today: '2026-10-06' });
+  assert.ok(al.some((a) => a.id === 'inv:cartaoDivida:2026-10' && /fecha hoje/.test(a.text)));
+});

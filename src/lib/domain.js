@@ -196,14 +196,19 @@ export function invoiceDates(card, key) {
   const closing = card.closingDay || 1, due = card.dueDay || closing;
   return { closeDate: dateInMonth(key, closing), dueDate: dateInMonth(due > closing ? key : shiftMonth(key, 1), due) };
 }
+/** dívida que o cartão já tinha ao ser cadastrado (saldo inicial negativo) */
+export const cardOpeningDebt = (card) => Math.max(-(card.initialBalance || 0), 0);
+/** em qual fatura (mês) essa dívida inicial cai: a escolhida no cadastro; sem escolha, a fatura vigente hoje */
+export const openingInvoiceKey = (card, today = todayISO()) => card.initialInvoice || invoiceMonthOf(today, card.closingDay || 1);
 export function cardInvoice(card, txs, key, today = todayISO()) {
   const { closeDate, dueDate } = invoiceDates(card, key);
   const items = txs.filter((t) => t.accountId === card.id && t.type !== 'transfer' && invoiceMonthOf(t.date, card.closingDay || 1) === key).sort((a, b) => a.date.localeCompare(b.date));
-  const total = sum(items, (t) => (t.type === 'income' ? -t.amount : t.amount));
+  const opening = key === openingInvoiceKey(card, today) ? cardOpeningDebt(card) : 0;
+  const total = opening + sum(items, (t) => (t.type === 'income' ? -t.amount : t.amount));
   const payments = txs.filter((t) => t.type === 'transfer' && t.toAccountId === card.id && t.invoiceMonth === key);
   const paid = sum(payments, (t) => t.amount), remaining = Math.max(total - paid, 0);
   const status = total <= 0 ? 'empty' : remaining === 0 ? 'paid' : dueDate < today ? 'late' : closeDate < today ? 'closed' : 'open';
-  return { key, closeDate, dueDate, items, total, paid, remaining, status, payments };
+  return { key, closeDate, dueDate, items, opening, total, paid, remaining, status, payments };
 }
 /** limite usado = dívida total do cartão (saldo negativo) */
 export const cardUsed = (card, txs) => Math.max(-accountBalance(card, txs, { includePending: true }), 0);
@@ -267,8 +272,11 @@ export function buildAlerts({ accounts, txs, recurrences, budgets, categories, t
   accounts.filter((a) => isCredit(a) && !a.archived).forEach((card) => {
     for (const k of [shiftMonth(key, -1), key, shiftMonth(key, 1)]) {
       const inv = cardInvoice(card, txs, k, today);
+      const fmt = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
       if (inv.remaining > 0 && (inv.status === 'late' || (inv.dueDate >= today && diffDays(today, inv.dueDate) <= 7))) {
         out.push({ id: `inv:${card.id}:${k}`, tone: inv.status === 'late' ? 'danger' : 'warn', text: `Fatura ${card.name}: ${inv.status === 'late' ? 'venceu' : 'vence'} em ${inv.dueDate.split('-').reverse().join('/')}`, value: inv.remaining, href: '/contas' });
+      } else if (inv.remaining > 0 && inv.closeDate <= today && inv.dueDate >= today) {
+        out.push({ id: `inv:${card.id}:${k}`, tone: 'warn', text: `Fatura ${card.name} ${inv.closeDate === today ? 'fecha hoje' : `fechou em ${fmt(inv.closeDate)}`} · vence em ${fmt(inv.dueDate)}`, value: inv.remaining, href: '/contas' });
       }
     }
   });

@@ -415,6 +415,7 @@ export function AccountDialog({ account, presetType, onClose }) {
   const [limit, setLimit] = useState(centsToField(account?.limit));
   const [closingDay, setClosingDay] = useState(String(account?.closingDay || 10));
   const [dueDay, setDueDay] = useState(String(account?.dueDay || 17));
+  const [initialInvoice, setInitialInvoice] = useState(account?.initialInvoice || invoiceMonthOf(todayISO(), Number(account?.closingDay || 10)));
   const [errors, setErrors] = useState({});
   const used = editing && data.transactions.some((t) => t.accountId === account.id || t.toAccountId === account.id);
   const credit = type === 'credit';
@@ -426,7 +427,7 @@ export function AccountDialog({ account, presetType, onClose }) {
         if (credit) { if (!(parseMoney(limit) > 0)) e.limit = 'Informe o limite do cartão.'; const c = Number(closingDay), d = Number(dueDay); if (!(c >= 1 && c <= 31)) e.closingDay = 'Dia entre 1 e 31.'; if (!(d >= 1 && d <= 31)) e.dueDay = 'Dia entre 1 e 31.'; }
         setErrors(e); if (hasErrors(e)) return;
         const bal = parseMoney(balance) * (negative ? -1 : 1);
-        upsert('accounts', { ...(account || {}), id: account?.id || uid(), name: name.trim(), type, initialBalance: bal, archived: account?.archived || false, ...(credit ? { limit: parseMoney(limit), closingDay: Number(closingDay), dueDay: Number(dueDay) } : {}) });
+        upsert('accounts', { ...(account || {}), id: account?.id || uid(), name: name.trim(), type, initialBalance: bal, archived: account?.archived || false, ...(credit ? { limit: parseMoney(limit), closingDay: Number(closingDay), dueDay: Number(dueDay), initialInvoice: /^\d{4}-\d{2}$/.test(initialInvoice) ? initialInvoice : invoiceMonthOf(todayISO(), Number(closingDay)) } : {}) });
         toast(editing ? 'Conta atualizada.' : 'Conta criada.'); close();
       }}
       footer={(close) => (<>
@@ -446,6 +447,7 @@ export function AccountDialog({ account, presetType, onClose }) {
           <Field label="Dia do fechamento" error={errors.closingDay}><input className="input" type="number" min={1} max={31} value={closingDay} onChange={(e) => setClosingDay(e.target.value)} aria-label="Dia do fechamento" /></Field>
           <Field label="Dia do vencimento" error={errors.dueDay}><input className="input" type="number" min={1} max={31} value={dueDay} onChange={(e) => setDueDay(e.target.value)} aria-label="Dia do vencimento" /></Field>
         </div>
+        <Field label="Dívida atual entra na fatura de" help="Mês da fatura que contém a dívida informada acima. Ela aparece nessa fatura, pode ser paga e gera aviso de fechamento e vencimento."><input className="input" type="month" value={initialInvoice} onChange={(e) => setInitialInvoice(e.target.value)} aria-label="Fatura da dívida atual" /></Field>
       </>)}
     </Modal>
   );
