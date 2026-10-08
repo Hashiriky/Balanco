@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store.jsx';
 import { cn, fmtMoney, maskMoney, monthKey, monthLabel, shiftMonth } from '@/lib/util.js';
 
 const PATHS = {
+  sparkle: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z',
   panel: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z', list: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4', bank: 'M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18', target: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8a4 4 0 100 8 4 4 0 000-8z',
   chart: 'M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-8', more: 'M5 12h.01M12 12h.01M19 12h.01', plus: 'M12 5v14M5 12h14', x: 'M6 6l12 12M18 6L6 18', left: 'M15 5l-7 7 7 7', right: 'M9 5l7 7-7 7',

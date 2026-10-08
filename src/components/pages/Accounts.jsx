@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
 import { Card, Empty, Icon, Kpi, Money, PageHeader, ProgressBar, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
-import { accountsOverview, cardAvailable, cardInvoice, cardOpeningDebt, cardUsed, isCredit, openingInvoiceKey } from '@/lib/domain.js';
+import { accountsOverview, cardAvailable, cardInvoice, cardOpeningDebt, cardUsed, groupByBank, isCredit, openingInvoiceKey } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { fmtDate, fmtMoney, monthLabel, shiftMonth, todayISO } from '@/lib/util.js';
@@ -55,6 +55,9 @@ export default function Accounts() {
   const allRows = showArchived ? [...activeRows, ...archived.map((account) => ({ account, current: 0, forecast: 0 }))] : activeRows;
   const rows = typeFilter === 'all' ? allRows : allRows.filter((r) => r.account.type === typeFilter);
   const cards = data.accounts.filter((a) => isCredit(a) && !a.archived);
+  const rowById = useMemo(() => new Map(rows.map((r) => [r.account.id, r])), [rows]);
+  const groups = useMemo(() => groupByBank(rows.map((r) => r.account)), [rows]);
+  const byBank = groups.some((g) => g.bank); // só mostra os títulos de banco se alguma conta tiver banco
   const typeCounts = useMemo(() => { const c = {}; allRows.forEach((r) => { c[r.account.type] = (c[r.account.type] || 0) + 1; }); return c; }, [allRows]);
   return (
     <>
@@ -77,15 +80,22 @@ export default function Accounts() {
         {rows.length ? (
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Nome</th><th>Tipo</th><th className="num">Saldo atual</th><th className="num">Previsto no fim do mês</th><th /></tr></thead>
-            <tbody>{rows.map((r) => {
-              return (
+            <tbody>{groups.flatMap((g) => {
+              const line = (r) => (
                 <tr key={r.account.id} className={r.account.archived ? 'muted click' : 'click'} onClick={() => ui.open('accountView', { account: r.account })}>
-                  <td>{r.account.name}{r.account.archived && <Tag>Arquivada</Tag>}</td>
+                  <td>{r.account.name}{r.account.primary && <Tag tone="ok">Principal</Tag>}{r.account.archived && <Tag>Arquivada</Tag>}</td>
                   <td>{ACCOUNT_TYPES[r.account.type]}{isCredit(r.account) && <small className="muted"> · limite {fmtMoney(r.account.limit)}</small>}</td>
                   <td className="num"><Money cents={r.current} tone="auto" /></td><td className="num"><Money cents={r.forecast} tone="auto" /></td>
                   <td className="w-act"><button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); ui.open('account', { account: r.account }); }}>Editar</button></td>
                 </tr>
               );
+              const items = g.items.map((a) => rowById.get(a.id));
+              if (!byBank) return items.map(line);
+              const sum = (k) => items.reduce((t, r) => t + r[k], 0);
+              return [
+                <tr key={`bank-${g.bank || '_'}`} className="group-row"><th colSpan={2}>{g.bank || 'Sem banco'}</th><th className="num"><Money cents={sum('current')} tone="auto" /></th><th className="num"><Money cents={sum('forecast')} tone="auto" /></th><th /></tr>,
+                ...items.map(line),
+              ];
             })}</tbody>
           </table></div>
         ) : <Empty title="Nenhuma conta encontrada" text="Tente outro filtro, ou crie uma conta pra começar." action={<button type="button" className="btn btn-primary" onClick={() => ui.open('account')}>Nova conta</button>} />}

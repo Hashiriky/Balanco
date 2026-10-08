@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui.jsx';
+import { LATEST_VERSION } from '@/lib/changelog.js';
 import { useStore } from '@/lib/store.jsx';
 import { cn } from '@/lib/util.js';
 
@@ -11,9 +12,10 @@ export const ITEMS = [
   { href: '/', label: 'Painel', icon: 'panel' }, { href: '/lancamentos', label: 'Lançamentos', icon: 'list' }, { href: '/agenda', label: 'Agenda', icon: 'calendar' },
   { href: '/contas', label: 'Contas', icon: 'bank' }, { href: '/carteira', label: 'Carteira', icon: 'trend' }, { href: '/orcamento', label: 'Orçamento', icon: 'target' }, { href: '/relatorios', label: 'Relatórios', icon: 'chart' },
 ];
-const MORE = [{ href: '/importar', label: 'Importar extrato', icon: 'upload' }, { href: '/ajustes', label: 'Ajustes', icon: 'file' }];
+const MORE = [{ href: '/importar', label: 'Importar extrato', icon: 'upload' }, { href: '/novidades', label: 'Novidades', icon: 'sparkle' }, { href: '/ajustes', label: 'Ajustes', icon: 'file' }];
 const SYNC = { off: 'Somente neste aparelho', syncing: 'Sincronizando…', ok: 'Sincronizado', error: 'Erro de sincronização' };
 const COLLAPSE_KEY = 'balanco.navCollapsed';
+const SEEN_KEY = 'balanco.seenVersion';
 
 export default function Nav() {
   const path = usePathname() || '/';
@@ -21,11 +23,18 @@ export default function Nav() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hasNew, setHasNew] = useState(false); // há uma versão em Novidades que ainda não foi vista
   const menuRef = useRef(null);
 
   useEffect(() => { try { setCollapsed(localStorage.getItem(COLLAPSE_KEY) === '1'); } catch { /* ignore */ } }, []);
   const toggleCollapsed = () => setCollapsed((c) => { try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); } catch { /* ignore */ } return !c; });
   useEffect(() => { setMobileOpen(false); setMenuOpen(false); }, [path]);
+  useEffect(() => {
+    try {
+      if (path === '/novidades') { localStorage.setItem(SEEN_KEY, LATEST_VERSION); setHasNew(false); }
+      else setHasNew(localStorage.getItem(SEEN_KEY) !== LATEST_VERSION);
+    } catch { /* ignore */ }
+  }, [path]);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') { setMobileOpen(false); setMenuOpen(false); } };
     const onClick = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
@@ -37,6 +46,7 @@ export default function Nav() {
   const link = (it) => (
     <Link key={it.href} href={it.href} className={cn('nav-link', path === it.href && 'on')} aria-current={path === it.href ? 'page' : undefined} title={collapsed ? it.label : undefined}>
       <Icon name={it.icon} size={19} /><span className="side-label">{it.label}</span>
+      {it.href === '/novidades' && hasNew && <span className="new-dot" role="img" aria-label="Novidade não vista" />}
     </Link>
   );
   return (

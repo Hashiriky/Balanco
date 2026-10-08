@@ -5,7 +5,7 @@ import { AccountName, CategoryLabel, StatusTag, TxAmount, useLookups } from '@/c
 import { AccountSelect, CategorySelect, WEEKDAY_OPTIONS } from '@/components/selects.jsx';
 import { Choice, Field, Icon, Modal, Money, MoneyInput, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
-import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, invoiceMonthOf } from '@/lib/domain.js';
+import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, bankOf, canBePrimary, defaultAccountId, invoiceMonthOf, primaryAccount } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
@@ -285,7 +285,7 @@ export function TxDialog({ tx, preset = {}, onClose }) {
   const { data, upsert, remove, setViewMonth } = useStore();
   const ui = useUI();
   const src = tx || preset, editing = !!tx;
-  const firstAccount = (data.accounts.find((a) => !a.archived && a.type !== 'investment') || data.accounts.find((a) => !a.archived))?.id || '';
+  const firstAccount = defaultAccountId(data.accounts); // a principal, se houver
   const [type, setType] = useState(src.type || 'expense');
   const [description, setDescription] = useState(src.description || '');
   const [amount, setAmount] = useState(centsToField(src.amount));
@@ -404,6 +404,8 @@ export function SettleDialog({ item, onClose }) {
 }
 
 /* ---------- Conta ---------- */
+const BANK_SUGGESTIONS = ['Banco do Brasil', 'Bradesco', 'C6 Bank', 'Caixa', 'Inter', 'Itaú', 'Mercado Pago', 'Nubank', 'PagBank', 'Santander', 'Sicoob', 'Sicredi'];
+
 export function AccountDialog({ account, presetType, onClose }) {
   const { data, upsert, remove } = useStore();
   const ui = useUI();
@@ -415,10 +417,14 @@ export function AccountDialog({ account, presetType, onClose }) {
   const [limit, setLimit] = useState(centsToField(account?.limit));
   const [closingDay, setClosingDay] = useState(String(account?.closingDay || 10));
   const [dueDay, setDueDay] = useState(String(account?.dueDay || 17));
+  const [bank, setBank] = useState(account?.bank || '');
+  const [primary, setPrimary] = useState(!!account?.primary);
   const [initialInvoice, setInitialInvoice] = useState(account?.initialInvoice || invoiceMonthOf(todayISO(), Number(account?.closingDay || 10)));
   const [errors, setErrors] = useState({});
   const used = editing && data.transactions.some((t) => t.accountId === account.id || t.toAccountId === account.id);
   const credit = type === 'credit';
+  const primaryOk = canBePrimary({ type });
+  const bankOptions = useMemo(() => [...new Set([...BANK_SUGGESTIONS, ...data.accounts.map(bankOf).filter(Boolean)])].sort((x, y) => x.localeCompare(y, 'pt-BR')), [data.accounts]);
   return (
     <Modal title={editing ? (type === 'investment' ? 'Editar investimento' : 'Editar conta') : (type === 'investment' ? 'Novo investimento' : 'Nova conta')} onClose={onClose}
       onSubmit={(close) => {
@@ -427,7 +433,9 @@ export function AccountDialog({ account, presetType, onClose }) {
         if (credit) { if (!(parseMoney(limit) > 0)) e.limit = 'Informe o limite do cartão.'; const c = Number(closingDay), d = Number(dueDay); if (!(c >= 1 && c <= 31)) e.closingDay = 'Dia entre 1 e 31.'; if (!(d >= 1 && d <= 31)) e.dueDay = 'Dia entre 1 e 31.'; }
         setErrors(e); if (hasErrors(e)) return;
         const bal = parseMoney(balance) * (negative ? -1 : 1);
-        upsert('accounts', { ...(account || {}), id: account?.id || uid(), name: name.trim(), type, initialBalance: bal, archived: account?.archived || false, ...(credit ? { limit: parseMoney(limit), closingDay: Number(closingDay), dueDay: Number(dueDay), initialInvoice: /^\d{4}-\d{2}$/.test(initialInvoice) ? initialInvoice : invoiceMonthOf(todayISO(), Number(closingDay)) } : {}) });
+        const id = account?.id || uid(), isPrimary = primaryOk && primary;
+        const others = isPrimary ? data.accounts.filter((a) => a.primary && a.id !== id).map((a) => ({ ...a, primary: false })) : [];
+        upsert('accounts', [{ ...(account || {}), id, name: name.trim(), type, bank: bank.trim(), primary: isPrimary, initialBalance: bal, archived: account?.archived || false, ...(credit ? { limit: parseMoney(limit), closingDay: Number(closingDay), dueDay: Number(dueDay), initialInvoice: /^\d{4}-\d{2}$/.test(initialInvoice) ? initialInvoice : invoiceMonthOf(todayISO(), Number(closingDay)) } : {}) }, ...others]);
         toast(editing ? 'Conta atualizada.' : 'Conta criada.'); close();
       }}
       footer={(close) => (<>
@@ -437,6 +445,8 @@ export function AccountDialog({ account, presetType, onClose }) {
       </>)}>
       <Field label="Nome" error={errors.name}><input className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder={type === 'investment' ? 'Ex.: CDB Banco X, Tesouro Selic, Ações' : 'Ex.: Banco X, Carteira, Cartão Y'} data-autofocus aria-label="Nome" /></Field>
       <Field label="Tipo"><select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">{Object.entries(ACCOUNT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
+      <Field label="Banco / instituição (opcional)" help="Serve para agrupar suas contas e cartões do mesmo banco."><input className="input" list="bank-options" value={bank} maxLength={40} onChange={(e) => setBank(e.target.value)} placeholder="Ex.: Nubank, Itaú, Mercado Pago" aria-label="Banco" /><datalist id="bank-options">{bankOptions.map((b) => <option key={b} value={b} />)}</datalist></Field>
+      {primaryOk && <label className="check inline"><input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} /><span>Conta principal <small className="muted">— já vem escolhida nos lançamentos novos (só uma por vez)</small></span></label>}
       <div className="grid-2">
         <Field label={credit ? 'Dívida atual do cartão' : 'Saldo inicial'} help={credit ? 'Compras anteriores ainda não pagas (deixe zerado se não houver).' : type === 'investment' && editing ? 'Só pra corrigir o ponto de partida. Pra aportar mais dinheiro depois, lance uma transferência — editar aqui mistura com o rendimento já calculado.' : 'Quanto havia na conta antes do primeiro lançamento.'}><MoneyInput value={balance} onChange={setBalance} aria-label="Saldo inicial" /></Field>
         <label className="check inline"><input type="checkbox" checked={negative} onChange={(e) => setNegative(e.target.checked)} /><span>Saldo negativo</span></label>
@@ -455,8 +465,8 @@ export function AccountDialog({ account, presetType, onClose }) {
 
 /* ---------- Pagar fatura ---------- */
 export function PayInvoiceDialog({ card, invoice, onClose }) {
-  const { upsert } = useStore();
-  const [origin, setOrigin] = useState('');
+  const { data, upsert } = useStore();
+  const [origin, setOrigin] = useState(() => primaryAccount(data.accounts)?.id || ''); // sugere a conta principal
   const [amount, setAmount] = useState(centsToField(invoice.remaining));
   const [date, setDate] = useState(todayISO());
   const [errors, setErrors] = useState({});

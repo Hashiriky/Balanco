@@ -1,9 +1,10 @@
 // Limpeza dos dados (do disco, da nuvem ou de arquivos), leitura/gravação local, mesclagem e backup.
+import { LATEST_VERSION } from './changelog.js';
 import { ACCOUNT_TYPES, FREQUENCIES, defaultCategories } from './defaults.js';
 import { fmtDate, fmtNumber, isValidISO, monthKey, uid } from './util.js';
 
 export const COLLECTIONS = ['accounts', 'categories', 'transactions', 'recurrences', 'budgets', 'rules'];
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = LATEST_VERSION;
 const KEY = (c) => `balanco.${c}`;
 export const GUEST_KEY = 'balanco.guest';
 
@@ -18,6 +19,9 @@ export function cleanAccount(a) {
   if (!a || !a.name) return null;
   const type = ACCOUNT_TYPES[a.type] ? a.type : 'checking';
   const out = { ...a, id: str(a.id) || uid(), name: str(a.name).trim(), type, initialBalance: int(a.initialBalance), archived: !!a.archived };
+  const bank = str(a.bank).trim().slice(0, 40);
+  if (bank) out.bank = bank; else delete out.bank;
+  if (a.primary && ['checking', 'savings', 'cash'].includes(type)) out.primary = true; else delete out.primary;
   if (type === 'credit') Object.assign(out, { limit: Math.max(0, int(a.limit)), closingDay: day(a.closingDay, 1), dueDay: day(a.dueDay, 10) });
   if (type === 'credit') { const m = monthOrNull(a.initialInvoice); if (m) out.initialInvoice = m; else delete out.initialInvoice; }
   return out;

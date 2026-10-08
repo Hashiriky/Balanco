@@ -233,3 +233,14 @@ dialog.modal-sm { width: min(440px, calc(100vw - 24px)); } dialog.modal-lg { wid
 .cat-pick-item:hover, .cat-pick-group-btn:hover { background: var(--hover); }
 .yield-history-list li, .batch-row { transition: background-color .08s; } .yield-history-list li:hover, .batch-row:hover { background: var(--hover); }
 .tip-row .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+
+/* Novidades (changelog), ponto de "novidade não vista" no menu e títulos de banco na tela Contas */
+.new-dot { flex: none; width: 8px; height: 8px; margin-left: auto; border-radius: 50%; background: var(--primary); }
+.sidebar.collapsed .new-dot { position: absolute; top: 8px; right: 12px; margin: 0; }
+.nav-link { position: relative; }
+.changelog { display: flex; flex-direction: column; gap: 10px; }
+.changelog li { display: flex; align-items: flex-start; gap: 10px; }
+.changelog-type { flex: 0 0 92px; } .changelog-type .tag { margin-left: 0; }
+.table tr.group-row th { background: var(--bg); color: var(--muted); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; text-align: left; padding-top: 8px; padding-bottom: 8px; }
+.table tr.group-row th.num { text-align: right; }
+@media (max-width: 560px) { .changelog li { flex-direction: column; gap: 4px; } .changelog-type { flex-basis: auto; } }

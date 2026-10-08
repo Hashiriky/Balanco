@@ -291,4 +291,24 @@ export function buildAlerts({ accounts, txs, recurrences, budgets, categories, t
   });
   return out;
 }
+/* ---------- Conta principal e bancos ---------- */
+/** só conta corrente, poupança ou dinheiro pode ser a principal (cartão e investimento, não) */
+export const canBePrimary = (a) => a.type === 'checking' || a.type === 'savings' || a.type === 'cash';
+export const primaryAccount = (accounts) => accounts.find((a) => a.primary && !a.archived && canBePrimary(a)) || null;
+/** conta que já vem escolhida num lançamento novo: a principal; sem principal, a primeira que não seja investimento */
+export const defaultAccountId = (accounts) => (primaryAccount(accounts) || accounts.find((a) => !a.archived && a.type !== 'investment') || accounts.find((a) => !a.archived))?.id || '';
+export const bankOf = (a) => String(a.bank || '').trim();
+/**
+ * Agrupa por banco: o grupo da conta principal vem primeiro, depois os outros em ordem alfabética,
+ * e "sem banco" (bank = '') por último. Dentro do grupo, a principal vem antes, depois por nome.
+ */
+export function groupByBank(accounts) {
+  const map = new Map();
+  accounts.forEach((a) => { const b = bankOf(a); if (!map.has(b)) map.set(b, []); map.get(b).push(a); });
+  const rank = (a) => (a.primary ? 0 : 1);
+  const groups = [...map.entries()].map(([bank, items]) => ({ bank, items: [...items].sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name, 'pt-BR')) }));
+  const weight = (g) => (g.items.some((a) => a.primary) ? 0 : g.bank ? 1 : 2);
+  return groups.sort((x, y) => weight(x) - weight(y) || x.bank.localeCompare(y.bank, 'pt-BR'));
+}
+
 export { addDaysISO, isoDate, monthKey };
