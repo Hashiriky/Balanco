@@ -8,9 +8,17 @@ import { accountsOverview, agendaOfMonth, agendaSummary, budgetRows, buildAlerts
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
-import { cn, fmtDate, fmtMoney, monthKey, monthLabel, sum, todayISO } from '@/lib/util.js';
+import { cn, fmtDate, fmtMoney, monthKey, monthLabel, shiftMonth, sum, todayISO } from '@/lib/util.js';
 
 const NEXT_LIMIT_KEY = 'balanco.nextLimit';
+
+/** Compara o mês com o anterior: em porcentagem (receitas/despesas) ou em reais (resultado). */
+const vsPrev = (cur, prev, money = false) => {
+  if (money) { const d = cur - prev; return `${d >= 0 ? '+' : '−'}${fmtMoney(Math.abs(d))} em relação ao mês anterior`; }
+  if (!prev) return 'Sem dados no mês anterior';
+  const pct = Math.round(((cur - prev) / prev) * 100);
+  return `${pct >= 0 ? '+' : '−'}${Math.abs(pct)}% em relação ao mês anterior (${fmtMoney(prev)})`;
+};
 
 export default function Dashboard() {
   const { data, viewMonth } = useStore();
@@ -22,14 +30,14 @@ export default function Dashboard() {
   const changeNextLimit = (n) => { setNextLimit(n); try { localStorage.setItem(NEXT_LIMIT_KEY, String(n)); } catch { /* ignore */ } };
   const v = useMemo(() => {
     const { accounts, transactions: txs, recurrences, budgets, categories } = data;
-    const ov = accountsOverview(accounts, txs, today), real = monthTotals(txs, viewMonth);
+    const ov = accountsOverview(accounts, txs, today), real = monthTotals(txs, viewMonth), prev = monthTotals(txs, shiftMonth(viewMonth, -1));
     const ag = agendaOfMonth({ recurrences, txs, key: viewMonth, today }), open = ag.filter((i) => i.status !== 'paid' && i.type !== 'transfer');
     const plan = { income: real.income + sum(open.filter((i) => i.type === 'income'), (i) => i.amount), expense: real.expense + sum(open.filter((i) => i.type === 'expense'), (i) => i.amount) };
     const idx = categoryIndex(categories);
     const cats = byCategory(txs.filter((t) => t.date.startsWith(viewMonth)), categories, { includePending: false }).slice(0, 7);
     const total = sum(byCategory(txs.filter((t) => t.date.startsWith(viewMonth)), categories, { includePending: false }), (c) => c.amount);
     return {
-      ov, real, plan, agSum: agendaSummary(ag), forecast: monthEndForecast({ accounts, txs, recurrences, today }), series: cashflowSeries(txs, viewMonth, 12), total,
+      ov, real, prev, plan, agSum: agendaSummary(ag), forecast: monthEndForecast({ accounts, txs, recurrences, today }), series: cashflowSeries(txs, viewMonth, 12), total,
       inv: investmentsOverview(accounts, txs, today),
       cats: cats.map((c) => ({ id: c.categoryId, value: c.amount, label: idx.get(c.categoryId)?.name || 'Sem categoria', color: rootOf(c.categoryId, idx)?.color || '#94a3b8' })),
       next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
@@ -64,9 +72,9 @@ export default function Dashboard() {
         {v.inv.rows.length > 0 && (
           <Kpi label="Investido" value={<Money cents={v.inv.balance} />} sub={v.inv.pct !== null ? `Rendimento acumulado: ${fmtMoney(v.inv.totalYield)} (${v.inv.pct >= 0 ? '+' : ''}${v.inv.pct.toFixed(2)}%)` : 'Sem rendimento registrado ainda'} tone={v.inv.totalYield >= 0 ? 'pos' : 'neg'} />
         )}
-        <Kpi label="Receitas do mês" value={<Money cents={v.real.income} />} sub={`Previsto: ${fmtMoney(v.plan.income)}`} tone="pos" />
-        <Kpi label="Despesas do mês" value={<Money cents={v.real.expense} />} sub={`Previsto: ${fmtMoney(v.plan.expense)}`} tone="neg" />
-        <Kpi label="Resultado do mês" value={<Money cents={v.real.result} tone="auto" />} sub={`Previsto: ${fmtMoney(v.plan.income - v.plan.expense)}`} />
+        <Kpi label="Receitas do mês" value={<Money cents={v.real.income} />} sub={<>Previsto: {fmtMoney(v.plan.income)}<br />{vsPrev(v.real.income, v.prev.income)}</>} tone="pos" />
+        <Kpi label="Despesas do mês" value={<Money cents={v.real.expense} />} sub={<>Previsto: {fmtMoney(v.plan.expense)}<br />{vsPrev(v.real.expense, v.prev.expense)}</>} tone="neg" />
+        <Kpi label="Resultado do mês" value={<Money cents={v.real.result} tone="auto" />} sub={<>Previsto: {fmtMoney(v.plan.income - v.plan.expense)}<br />{vsPrev(v.real.result, v.prev.result, true)}</>} />
       </div>
       {isCurrent && (
         <div className="forecast">

@@ -6,6 +6,18 @@
 
 export const CHANGELOG = [
   {
+    version: '1.2.0',
+    date: '2026-10-08',
+    title: 'Lançamento mais rápido e Painel comparativo',
+    items: [
+      { type: 'novo', text: 'Botão "Salvar e novo" no lançamento: salva e já deixa o formulário pronto para o próximo, mantendo tipo, conta, data e situação.' },
+      { type: 'novo', text: 'Botão "Repetir último lançamento": preenche descrição, valor, conta e categoria com os do lançamento mais recente.' },
+      { type: 'novo', text: 'Atalhos de teclado: aperte N para criar uma despesa nova e / para ir direto ao campo de busca (só funcionam fora de campos de texto).' },
+      { type: 'novo', text: 'No Painel, receitas, despesas e resultado agora mostram a comparação com o mês anterior.' },
+      { type: 'correção', text: 'Os títulos de banco na tela Contas ficavam quase da cor do fundo; agora têm fundo azul claro, texto escuro e uma faixa de destaque.' },
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-10-08',
     title: 'Conta principal, bancos e Novidades',

@@ -1,6 +1,7 @@
 'use client';
 // Casca do app: provedores, barra lateral, janelas e tela de acesso.
 import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
 import AuthScreen from '@/components/Auth.jsx';
 import { AccountDialog, AccountViewDialog, BudgetDialog, CategoryDialog, CategoryPickerDialog, ConfirmDialog, PayInvoiceDialog, RecurrenceDialog, RuleDialog, SettleDialog, TxDialog, TxViewDialog, YieldBatchDialog, YieldUpdateDialog } from '@/components/Dialogs.jsx';
 import Nav from '@/components/Nav.jsx';
@@ -16,6 +17,20 @@ function ModalHost() {
 function Inner({ children }) {
   const { status, ready, authOpen } = useStore();
   const path = usePathname();
+  const { open, stack } = useUI();
+  /* Atalhos de teclado (só fora de campos de texto e sem janela aberta): N = novo lançamento, / = ir para a busca da tela */
+  useEffect(() => {
+    if (!ready || authOpen || stack.length) return undefined;
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target, tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+      if (e.key === 'n' || e.key === 'N') { e.preventDefault(); open('tx', { preset: { type: 'expense' } }); }
+      else if (e.key === '/') { const el = document.querySelector('main input[type="search"]'); if (el) { e.preventDefault(); el.focus(); } }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [ready, authOpen, stack.length, open]);
   return (
     <div className={ready ? 'shell' : undefined}>
       {ready && <Nav />}

@@ -8,7 +8,7 @@ Finanças pessoais em Next.js 15 + React 19 + Firebase. Este documento reúne o 
 
 ## 1. Estado atual
 
-> **Versão 1.1.0** (08/10/2026): conta Principal, campo Banco, Contas agrupadas por banco e a tela **Novidades** (changelog). O que mudou em cada versão está no menu, em *Novidades*, e no arquivo `src/lib/changelog.js`. **Para registrar uma mudança nova, é só acrescentar uma entrada no topo desse arquivo.**
+> **Versão 1.2.0** (08/10/2026): "Salvar e novo", "Repetir último lançamento", atalhos `N` e `/`, comparação com o mês anterior no Painel e contraste dos títulos de banco. A 1.1.0 trouxe conta Principal, campo Banco, Contas agrupadas por banco e a tela **Novidades** (changelog). O que mudou em cada versão está no menu, em *Novidades*, e no arquivo `src/lib/changelog.js`. **Para registrar uma mudança nova, é só acrescentar uma entrada no topo desse arquivo.**
 
 O app está mais completo do que o planejamento sugere. Já existem:
 
@@ -50,11 +50,11 @@ Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** gra
 - [ ] **(M)** Tornar `syncAll` mais seguro: comparar antes de apagar e mostrar um resumo ("vai apagar X e gravar Y") antes de confirmar.
 
 ### Fase 2 — Uso no dia a dia
-- [ ] **(P)** Botão **"Salvar e novo"** no lançamento e **"Repetir último"**.
-- [ ] **(P)** Atalhos de teclado discretos (`N` = novo lançamento, `/` = busca). Sem paleta de comandos.
+- [x] **(P)** Botão **"Salvar e novo"** no lançamento e **"Repetir último"**.
+- [x] **(P)** Atalhos de teclado discretos (`N` = novo lançamento, `/` = busca). Sem paleta de comandos.
 - [ ] **(M)** **Modelos de lançamento** (café, mercado, combustível) para preencher em um toque.
 - [ ] **(M)** **Busca global** (descrição, valor, categoria) acessível de qualquer tela.
-- [ ] **(P)** No Painel, comparar com o **mês anterior** (receitas, despesas, resultado).
+- [x] **(P)** No Painel, comparar com o **mês anterior** (receitas, despesas, resultado).
 - [ ] **(M)** **Orçamento por mês com sobra acumulada** (já previsto na V2).
 
 ### Fase 3 — Recursos novos (V2 do planejamento)
@@ -73,6 +73,7 @@ Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** gra
 
 ### Fase 5 — Acessibilidade e UI
 - [ ] **(M)** Dar acesso por teclado aos gráficos (foco nas barras ou uma tabela alternativa com os mesmos valores).
+- [x] **(P)** Aumentar o contraste dos títulos de banco na tela Contas (estavam quase da cor do fundo). *Feito na 1.2.0.*
 - [ ] **(P)** Respeitar `prefers-reduced-motion` e conferir contraste AA nas cores de status.
 - [ ] **(M)** Conferir no celular real: tabelas largas (Lançamentos, Relatórios) devem virar lista de cartões ou rolar sem quebrar a página.
 - [ ] **(P)** Tela de **primeiros passos** também nas telas vazias de Agenda, Orçamento e Carteira (hoje só o Painel tem).

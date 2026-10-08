@@ -241,6 +241,7 @@ dialog.modal-sm { width: min(440px, calc(100vw - 24px)); } dialog.modal-lg { wid
 .changelog { display: flex; flex-direction: column; gap: 10px; }
 .changelog li { display: flex; align-items: flex-start; gap: 10px; }
 .changelog-type { flex: 0 0 92px; } .changelog-type .tag { margin-left: 0; }
-.table tr.group-row th { background: var(--bg); color: var(--muted); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; text-align: left; padding-top: 8px; padding-bottom: 8px; }
+.table tr.group-row th { background: var(--primary-soft); color: var(--primary-dark); font-size: 14.5px; font-weight: 700; text-align: left; padding: 10px 12px; border-top: 1px solid #c9d6f7; border-bottom: 1px solid #c9d6f7; }
+.table tr.group-row th:first-child { box-shadow: inset 4px 0 0 var(--primary); }
 .table tr.group-row th.num { text-align: right; }
 @media (max-width: 560px) { .changelog li { flex-direction: column; gap: 4px; } .changelog-type { flex-basis: auto; } }

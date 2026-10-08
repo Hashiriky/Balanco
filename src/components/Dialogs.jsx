@@ -309,7 +309,7 @@ export function TxDialog({ tx, preset = {}, onClose }) {
     }
   };
 
-  const submit = (close) => {
+  const save = (close, again = false) => {
     const e = {};
     if (!description.trim() && type !== 'transfer') e.description = 'Informe a descrição.';
     if (!(cents > 0)) e.amount = 'Informe um valor maior que zero.';
@@ -327,7 +327,18 @@ export function TxDialog({ tx, preset = {}, onClose }) {
     } else upsert('transactions', { ...base, id: uid(), amount: cents, date, status: paid ? 'paid' : 'pending', createdAt: new Date().toISOString() });
     setViewMonth(date.slice(0, 7));
     toast(editing ? 'Lançamento atualizado.' : parcels > 1 && type === 'expense' ? `${parcels} parcelas lançadas.` : 'Lançamento salvo.');
-    close();
+    if (again) { // "Salvar e novo": limpa o que muda de um lançamento pro outro e mantém tipo, conta, data e situação
+      setDescription(''); setAmount(''); setCategoryId(''); setNotes(''); setParcels(1); setErrors({});
+      setTimeout(() => document.getElementById('tx-description')?.focus(), 0);
+    } else close();
+  };
+  const submit = (close) => save(close, false);
+  /* "Repetir último": copia descrição, valor, conta e categoria do lançamento mais recente */
+  const last = useMemo(() => (editing ? null : [...data.transactions].filter((t) => !t.recurrenceId).sort((a, b) => String(b.createdAt || b.date).localeCompare(String(a.createdAt || a.date)))[0] || null), [editing, data.transactions]);
+  const repeatLast = () => {
+    setType(last.type); setDescription(String(last.description || '').replace(/ \(\d+\/\d+\)$/, '')); setAmount(centsToField(last.amount));
+    if (data.accounts.some((a) => a.id === last.accountId && !a.archived)) setAccountId(last.accountId);
+    setToAccountId(last.type === 'transfer' ? last.toAccountId || '' : ''); setCategoryId(last.type === 'transfer' ? '' : last.categoryId || ''); setErrors({});
   };
   const del = async (close) => {
     const sib = tx.installment ? data.transactions.filter((x) => x.installment?.group === tx.installment.group) : [];
@@ -343,10 +354,11 @@ export function TxDialog({ tx, preset = {}, onClose }) {
       footer={(close) => (<>
         {editing && <button type="button" className="btn btn-danger-outline" onClick={() => del(close)}><Icon name="trash" />Excluir</button>}
         {editing && <button type="button" className="btn btn-secondary" onClick={() => { close(); setTimeout(() => ui.open('tx', { preset: { ...tx, id: undefined, date: todayISO(), installment: undefined, recurrenceId: undefined, recurrenceDate: undefined, externalId: undefined } }), 0); }}>Duplicar</button>}
-        <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button><button type="submit" className="btn btn-primary">Salvar</button>
+        <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button>{!editing && <button type="button" className="btn btn-secondary" onClick={() => save(close, true)}>Salvar e novo</button>}<button type="submit" className="btn btn-primary">Salvar</button>
       </>)}>
+      {last && !description.trim() && !(cents > 0) && <button type="button" className="btn btn-secondary btn-sm" onClick={repeatLast} title={`${last.description} · ${fmtMoney(last.amount)}`}>Repetir último lançamento</button>}
       <Choice name="txType" value={type} onChange={changeType} options={[{ value: 'expense', label: 'Despesa' }, { value: 'income', label: 'Receita' }, { value: 'transfer', label: 'Transferência' }]} />
-      <Field label="Descrição" error={errors.description}><input className="input" value={description} maxLength={80} onChange={(e) => setDescription(e.target.value)} data-autofocus placeholder={type === 'transfer' ? 'Opcional' : 'Ex.: Supermercado, Salário…'} aria-label="Descrição" /></Field>
+      <Field label="Descrição" error={errors.description}><input className="input" value={description} maxLength={80} onChange={(e) => setDescription(e.target.value)} id="tx-description" data-autofocus placeholder={type === 'transfer' ? 'Opcional' : 'Ex.: Supermercado, Salário…'} aria-label="Descrição" /></Field>
       <div className="grid-2">
         <Field label="Valor" error={errors.amount}><MoneyInput value={amount} onChange={setAmount} aria-label="Valor" /></Field>
         <Field label="Data" error={errors.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
