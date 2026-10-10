@@ -1,19 +1,17 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { BarChart, HBars, LineChart } from '@/components/charts.jsx';
+import PeriodPicker from '@/components/PeriodPicker.jsx';
 import { Card, Empty, Icon, Money, PageHeader, Tabs } from '@/components/ui.jsx';
 import { byCategory, cashflowSeries, categoryIndex, categoryMonthTable, netWorthSeries, rootOf } from '@/lib/domain.js';
+import { periodLabel, presetRange } from '@/lib/period.js';
 import { tableToCSV } from '@/lib/storage.js';
 import { useStore } from '@/lib/store.jsx';
-import { fmtMoney, fmtPct, monthKey, monthLabel, monthShort, monthsBetween, shiftMonth, sum, todayISO } from '@/lib/util.js';
+import { fmtMoney, fmtPct, lastDayOfMonth, monthKey, monthLabel, monthShort, monthsBetween, sum, todayISO } from '@/lib/util.js';
 
-const PRESETS = { 6: 'Últimos 6 meses', 12: 'Últimos 12 meses', ytd: 'Ano atual', prev: 'Ano anterior' };
-function keysFor(preset, nowKey) {
-  const y = Number(nowKey.slice(0, 4));
-  if (preset === 'ytd') return monthsBetween(`${y}-01`, nowKey);
-  if (preset === 'prev') return monthsBetween(`${y - 1}-01`, `${y - 1}-12`);
-  const n = Number(preset); return Array.from({ length: n }, (_, i) => shiftMonth(nowKey, i - n + 1));
-}
+/* atalhos oferecidos nos relatórios (que trabalham por mês); qualquer outro intervalo se escolhe no calendário */
+const REPORT_PRESETS = ['month', 'lastMonth', 'm3', 'm6', 'm12', 'year', 'lastYear', 'all'];
+const MAX_MONTHS = 36; // acima disso o gráfico fica ilegível: mostra os últimos 36 meses do período
 const money2 = (c) => (c / 100).toFixed(2).replace('.', ',');
 function download(name, content) {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
@@ -22,15 +20,24 @@ function download(name, content) {
 
 export default function Reports() {
   const { data } = useStore();
-  const [tab, setTab] = useState('cashflow'); const [preset, setPreset] = useState('12'); const [pending, setPending] = useState(false); const [ctype, setCtype] = useState('expense');
+  const [tab, setTab] = useState('cashflow'); const [range, setRange] = useState(() => presetRange('m12', todayISO())); const [pending, setPending] = useState(false); const [ctype, setCtype] = useState('expense');
   const nowKey = monthKey(new Date());
-  const keys = useMemo(() => keysFor(preset, nowKey), [preset, nowKey]);
+  /* limites reais do período; "todo o período" vai do primeiro lançamento até o fim do mês atual (ou do último lançamento) */
+  const bounds = useMemo(() => {
+    const dates = data.transactions.map((t) => t.date).sort();
+    const endOfNow = lastDayOfMonth(nowKey);
+    return { first: range.from || dates[0] || `${nowKey}-01`, last: range.to || (dates.length && dates[dates.length - 1] > endOfNow ? dates[dates.length - 1] : endOfNow) };
+  }, [range, data.transactions, nowKey]);
+  const allKeys = useMemo(() => monthsBetween(bounds.first.slice(0, 7), bounds.last.slice(0, 7)), [bounds]);
+  const keys = useMemo(() => allKeys.slice(-MAX_MONTHS), [allKeys]);
+  const trimmed = allKeys.length > keys.length;
   const endKey = keys[keys.length - 1];
-  const inKeys = useMemo(() => { const s = new Set(keys); return data.transactions.filter((t) => s.has(t.date.slice(0, 7))); }, [data.transactions, keys]);
-  const flow = useMemo(() => { let acc = 0; return cashflowSeries(data.transactions, endKey, keys.length, { includePending: pending }).map((m) => { acc += m.result; return { ...m, acc }; }); }, [data.transactions, endKey, keys.length, pending]);
+  const lo = bounds.first > `${keys[0]}-01` ? bounds.first : `${keys[0]}-01`; // primeiro dia considerado
+  const inKeys = useMemo(() => data.transactions.filter((t) => t.date >= lo && t.date <= bounds.last), [data.transactions, lo, bounds.last]);
+  const flow = useMemo(() => { let acc = 0; return cashflowSeries(inKeys, endKey, keys.length, { includePending: pending }).map((m) => { acc += m.result; return { ...m, acc }; }); }, [inKeys, endKey, keys.length, pending]);
   const idx = useMemo(() => categoryIndex(data.categories), [data.categories]);
   const catTotal = useMemo(() => byCategory(inKeys, data.categories, { type: ctype, level: 'root', includePending: pending }), [inKeys, data.categories, ctype, pending]);
-  const table = useMemo(() => categoryMonthTable(data.transactions, data.categories, keys, { type: ctype, includePending: pending }), [data.transactions, data.categories, keys, ctype, pending]);
+  const table = useMemo(() => categoryMonthTable(inKeys, data.categories, keys, { type: ctype, includePending: pending }), [inKeys, data.categories, keys, ctype, pending]);
   const worth = useMemo(() => netWorthSeries(data.accounts, data.transactions, endKey, Math.min(keys.length, 24)), [data.accounts, data.transactions, endKey, keys.length]);
   const sumIncome = sum(flow, (m) => m.income), sumExpense = sum(flow, (m) => m.expense);
   const exportFlow = () => download(`fluxo-de-caixa-${todayISO()}.csv`, tableToCSV(['Mês', 'Receitas', 'Despesas', 'Resultado', 'Acumulado'], flow.map((m) => [monthLabel(m.key), money2(m.income), money2(m.expense), money2(m.result), money2(m.acc)])));
@@ -39,11 +46,13 @@ export default function Reports() {
 
   return (
     <>
-      <PageHeader title="Relatórios" subtitle={`${monthLabel(keys[0])} a ${monthLabel(endKey)}`} />
+      <PageHeader title="Relatórios" subtitle={`${periodLabel(range, todayISO(), REPORT_PRESETS)}${trimmed ? ` · mostrando os últimos ${MAX_MONTHS} meses` : ''}`}>
+        <button type="button" className="btn btn-secondary" onClick={() => window.print()} title="Abre a impressão: escolha “Salvar como PDF” como destino"><Icon name="download" size={16} />Imprimir / salvar PDF</button>
+      </PageHeader>
       <Card className="filters">
         <div className="filter-row">
           <div className="field"><span className="label">Relatório</span><Tabs label="Relatório" value={tab} onChange={setTab} tabs={[{ value: 'cashflow', label: 'Fluxo de caixa' }, { value: 'categories', label: 'Categorias' }, { value: 'worth', label: 'Patrimônio' }, { value: 'table', label: 'Tabela mensal' }]} /></div>
-          <label className="field"><span className="label">Período</span><select className="select" value={preset} onChange={(e) => setPreset(e.target.value)} aria-label="Período">{Object.entries(PRESETS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <div className="field"><span className="label">Período</span><PeriodPicker value={range} onChange={setRange} presets={REPORT_PRESETS} onReset={() => setRange(presetRange('m12', todayISO()))} resetLabel="Últimos 12 meses" /></div>
           {(tab === 'categories' || tab === 'table') && <label className="field"><span className="label">Tipo</span><select className="select" value={ctype} onChange={(e) => setCtype(e.target.value)} aria-label="Tipo"><option value="expense">Despesas</option><option value="income">Receitas</option></select></label>}
           {tab !== 'worth' && <label className="check inline"><input type="checkbox" checked={pending} onChange={(e) => setPending(e.target.checked)} /><span>Incluir lançamentos previstos</span></label>}
         </div>

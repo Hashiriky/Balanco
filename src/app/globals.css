@@ -245,3 +245,58 @@ dialog.modal-sm { width: min(440px, calc(100vw - 24px)); } dialog.modal-lg { wid
 .table tr.group-row th:first-child { box-shadow: inset 4px 0 0 var(--primary); }
 .table tr.group-row th.num { text-align: right; }
 @media (max-width: 560px) { .changelog li { flex-direction: column; gap: 4px; } .changelog-type { flex-basis: auto; } }
+
+/* Atalhos de preenchimento no formulário de lançamento ("Repetir último" e "Mais usados") */
+.quick-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.quick-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--border); background: var(--surface); }
+
+/* Janela aberta: a página de trás não rola (nem com a roda do mouse sobre o fundo escuro); a rolagem fica contida no modal */
+html { scrollbar-gutter: stable; }
+html[data-modals] { overflow: hidden; }
+dialog.modal, .modal-body { overscroll-behavior: contain; }
+
+/* Impressão / PDF: mantém as cores dos gráficos, sem sombras e sem cortar cartões no meio */
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .card { box-shadow: none; break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+  .modal, .skip-link { display: none !important; }
+}
+
+/* Quem pede menos movimento no sistema não vê animações nem transições */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Busca global e botão "Buscar" do menu */
+.search-results { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border-soft); border-radius: 8px; overflow: hidden; }
+.search-results li + li { border-top: 1px solid var(--border-soft); }
+.search-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 12px; border: 0; background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.search-item:hover, .search-item:focus-visible { background: var(--hover); }
+.search-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.nav-link { width: 100%; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.kbd { margin-left: auto; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font: 600 12px/18px var(--font); }
+
+/* Cor da conta */
+.acc-label { display: inline-flex; align-items: center; gap: 7px; } .acc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { width: 26px; height: 26px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--border); cursor: pointer; font-size: 13px; line-height: 22px; text-align: center; }
+.swatch.on { box-shadow: 0 0 0 2px var(--text); } .swatch-none { background: var(--surface); color: var(--muted); }
+.block { display: block; }
+
+/* Seletor de período */
+.period-btn { max-width: 100%; justify-content: flex-start; } .period-btn-label { font-weight: 600; } .period-btn-dates { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.period-summary { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 6px; background: var(--primary-soft); color: var(--primary-dark); }
+.period-layout { display: grid; grid-template-columns: 11.5rem 1fr; gap: 18px; align-items: start; }
+.period-presets { display: flex; flex-direction: column; gap: 4px; }
+.period-chip { padding: 8px 12px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; font-size: 14.5px; text-align: left; cursor: pointer; }
+.period-chip:hover { background: var(--hover); } .period-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.cal-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; } .cal-nav .select { flex: 1; min-width: 0; } .cal-nav .cal-year { flex: 0 0 5.5rem; }
+.cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); } .cal-week { text-align: center; color: var(--muted); font-size: 13px; font-weight: 600; padding: 2px 0 4px; }
+.cal-grid { row-gap: 2px; }
+.cal-day { width: 36px; height: 34px; margin: 0 auto; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 14.5px; cursor: pointer; }
+.cal-day:hover { background: var(--hover); } .cal-day.out { color: #98a2b3; }
+.cal-day.mid { background: var(--primary-soft); color: var(--primary-dark); border-radius: 0; width: 100%; }
+.cal-day.edge { background: var(--primary); color: #fff; font-weight: 700; } .cal-day.today:not(.edge) { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.cal-typed { margin-top: 4px; }
+@media (max-width: 640px) { .period-layout { grid-template-columns: 1fr; } .period-presets { flex-direction: row; flex-wrap: wrap; } }

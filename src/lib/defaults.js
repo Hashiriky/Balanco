@@ -27,5 +27,8 @@ export function defaultCategories() {
   });
   return out;
 }
+/** cores que dá para escolher em cada conta (ajuda a reconhecer a conta nas listas) */
+export const ACCOUNT_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0d9488', '#475569'];
+
 export const ACCOUNT_TYPES = { checking: 'Conta corrente', savings: 'Poupança', cash: 'Dinheiro', investment: 'Investimento', credit: 'Cartão de crédito' };
 export const FREQUENCIES = { monthly: 'Mensal', weekly: 'Semanal', yearly: 'Anual' };

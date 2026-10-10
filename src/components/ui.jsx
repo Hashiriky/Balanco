@@ -2,6 +2,7 @@
 // Peças reutilizáveis da interface (visual sóbrio, sem efeitos).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@/lib/store.jsx';
+import { useUI } from '@/lib/ui-context.jsx';
 import { cn, fmtMoney, maskMoney, monthKey, monthLabel, shiftMonth } from '@/lib/util.js';
 
 const PATHS = {
@@ -65,13 +66,29 @@ export function Choice({ options, value, onChange, name }) {
 export function Modal({ title, onClose, children, footer, size = 'md', onSubmit }) {
   const ref = useRef(null);
   useEffect(() => { const d = ref.current; if (d && !d.open) { d.showModal(); d.querySelector('[data-autofocus]')?.focus({ preventScroll: true }); } }, []);
-  const down = useRef(false);
+  const ui = useUI();
+  /* trava a rolagem da página enquanto há janela aberta (conta quantas estão abertas, pois podem empilhar) */
+  useEffect(() => {
+    const el = document.documentElement;
+    el.dataset.modals = String(Number(el.dataset.modals || 0) + 1);
+    return () => { const n = Number(el.dataset.modals || 1) - 1; if (n <= 0) delete el.dataset.modals; else el.dataset.modals = String(n); };
+  }, []);
+  const down = useRef(false), dirty = useRef(false);
   const close = useCallback(() => onClose(), [onClose]);
+  /* Formulários (onSubmit) não fecham ao clicar fora, para não perder o que foi digitado.
+     O Esc (que também dispara ao fechar o seletor de data, por exemplo) pergunta antes se já houve digitação. */
+  const onEsc = async () => {
+    if (onSubmit && dirty.current && ui) {
+      const ok = await ui.confirm({ title: 'Descartar o que foi preenchido?', message: 'Se fechar agora, o que você digitou neste formulário será perdido.', okLabel: 'Descartar', danger: true });
+      if (!ok) return;
+    }
+    close();
+  };
   const Tag = onSubmit ? 'form' : 'div';
   return (
-    <dialog ref={ref} className={cn('modal', `modal-${size}`)} aria-label={title} onCancel={(e) => { e.preventDefault(); close(); }}
-      onMouseDown={(e) => { down.current = e.target === ref.current; }} onClick={(e) => { if (e.target === ref.current && down.current) close(); }}>
-      <Tag className="modal-in" {...(onSubmit ? { onSubmit: (e) => { e.preventDefault(); onSubmit(close); }, autoComplete: 'off', noValidate: true } : {})}>
+    <dialog ref={ref} className={cn('modal', `modal-${size}`)} aria-label={title} onCancel={(e) => { e.preventDefault(); onEsc(); }}
+      onMouseDown={(e) => { down.current = e.target === ref.current; }} onClick={(e) => { if (!onSubmit && e.target === ref.current && down.current) close(); }}>
+      <Tag className="modal-in" {...(onSubmit ? { onSubmit: (e) => { e.preventDefault(); onSubmit(close); }, onInput: () => { dirty.current = true; }, autoComplete: 'off', noValidate: true } : {})}>
         <header className="modal-head"><h2>{title}</h2><button type="button" className="icon-btn" onClick={close} aria-label="Fechar"><Icon name="x" /></button></header>
         <div className="modal-body">{typeof children === 'function' ? children(close) : children}</div>
         {footer && <footer className="modal-foot">{typeof footer === 'function' ? footer(close) : footer}</footer>}

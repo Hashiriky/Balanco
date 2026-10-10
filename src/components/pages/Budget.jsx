@@ -5,7 +5,7 @@ import { Card, Empty, Kpi, Money, PageHeader, ProgressBar } from '@/components/u
 import { budgetRows, byCategory, inMonth } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
-import { fmtPct, monthLabel, sum } from '@/lib/util.js';
+import { fmtMoney, fmtPct, monthLabel, sum } from '@/lib/util.js';
 
 const LEVEL = { ok: 'Dentro do limite', high: 'Perto do limite', over: 'Estourado' };
 export default function Budget() {
@@ -33,7 +33,7 @@ export default function Budget() {
             <thead><tr><th>Categoria</th><th className="num">Orçado</th><th className="num">Realizado</th><th className="num">Disponível</th><th className="w-bar">Utilização</th><th /></tr></thead>
             <tbody>{rows.map((r) => (
               <tr key={r.budget.id} className="click" onClick={() => ui.open('budget', { categoryId: r.budget.categoryId })}>
-                <td><CategoryLabel id={r.category.id} lk={lk} /></td><td className="num"><Money cents={r.limit} /></td><td className="num"><Money cents={r.spent} /></td>
+                <td><CategoryLabel id={r.category.id} lk={lk} /></td><td className="num"><Money cents={r.limit} />{r.carry > 0 && <small className="muted block">inclui {fmtMoney(r.carry)} de sobra</small>}</td><td className="num"><Money cents={r.spent} /></td>
                 <td className="num"><Money cents={r.left} tone="auto" /></td><td><ProgressBar pct={r.pct} level={r.level} /><small className={r.level === 'over' ? 'neg' : 'muted'}>{fmtPct(r.pct)} · {LEVEL[r.level]}</small></td>
                 <td className="w-act"><button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); ui.open('budget', { categoryId: r.budget.categoryId }); }}>Editar</button></td>
               </tr>

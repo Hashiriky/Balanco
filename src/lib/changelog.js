@@ -6,6 +6,53 @@
 
 export const CHANGELOG = [
   {
+    version: '1.6.0',
+    date: '2026-10-10',
+    title: 'Novo seletor de período',
+    items: [
+      { type: 'novo', text: 'Seletor de período em Lançamentos e Relatórios: um botão mostra o período atual e abre uma janela com atalhos (Hoje, Ontem, Esta semana, Mês passado, Últimos 3, 6 e 12 meses, Este ano, Todo o período…) e um calendário para escolher qualquer intervalo.' },
+      { type: 'novo', text: 'No calendário, clique no dia inicial e depois no final. Também dá para digitar as datas nos campos De e Até. Nada muda na tela até você clicar em Aplicar.' },
+      { type: 'melhoria', text: 'Relatórios agora aceitam qualquer intervalo de datas, não só 4 períodos fixos. Todos os gráficos e tabelas respeitam o recorte (inclusive meses parciais).' },
+      { type: 'melhoria', text: 'Em Lançamentos, o período continua seguindo o mês escolhido no topo da página até você escolher outro; "Voltar ao mês selecionado" desfaz a escolha.' },
+      { type: 'melhoria', text: 'Relatórios com mais de 36 meses mostram os últimos 36 para os gráficos continuarem legíveis, e a tela avisa quando isso acontece.' },
+    ],
+  },
+  {
+    version: '1.5.0',
+    date: '2026-10-09',
+    title: 'Sobra no orçamento e cor nas contas',
+    items: [
+      { type: 'novo', text: 'Orçamento com sobra acumulada: ao editar um orçamento, marque "Levar a sobra para o mês seguinte". O que você não gastar soma ao limite do próximo mês (conta a partir do mês em que você ativar).' },
+      { type: 'novo', text: 'Cor por conta: escolha uma cor no cadastro da conta e ela aparece ao lado do nome nas listas (lançamentos, agenda, painel e tela Contas).' },
+      { type: 'melhoria', text: 'Na tela de Orçamento, o limite mostra quanto veio de sobra do mês anterior.' },
+      { type: 'melhoria', text: 'Conferido o contraste das cores de status (verde, vermelho, laranja, cinza e azul): todas passam no padrão de acessibilidade AA.' },
+    ],
+  },
+  {
+    version: '1.4.0',
+    date: '2026-10-09',
+    title: 'Mais segurança, PDF e rolagem corrigida',
+    items: [
+      { type: 'correção', text: 'Com uma janela aberta, a tela de trás não rola mais quando você usa a roda do mouse. A rolagem fica só dentro da janela.' },
+      { type: 'novo', text: 'Busca global: botão "Buscar" no menu ou tecla / em qualquer tela. Procura em todos os lançamentos por descrição, valor, conta, categoria ou data (dá para combinar palavras, como "mercado 50").' },
+      { type: 'novo', text: 'Cópia de segurança automática: antes de "Substituir tudo" (restaurar backup) e de "Apagar tudo", o app baixa sozinho um arquivo com os dados atuais.' },
+      { type: 'novo', text: 'Relatórios: botão "Imprimir / salvar PDF". Na janela de impressão, escolha "Salvar como PDF" como destino.' },
+      { type: 'melhoria', text: 'Impressão mais bonita: gráficos mantêm as cores, sem sombras e sem cortar os cartões no meio.' },
+      { type: 'melhoria', text: 'Quem desativa animações no sistema (acessibilidade) não vê mais animações nem transições no app.' },
+    ],
+  },
+  {
+    version: '1.3.0',
+    date: '2026-10-08',
+    title: 'Formulários mais seguros e atalhos de preenchimento',
+    items: [
+      { type: 'correção', text: 'Clicar fora de um formulário (lançamento, conta, etc.) não fecha mais a janela, então você não perde o que estava digitando.' },
+      { type: 'correção', text: 'Ao apertar Esc num formulário já preenchido, o app pergunta antes de descartar. O Esc também dispara ao fechar o seletor de data, por isso a proteção.' },
+      { type: 'novo', text: 'Atalhos "Mais usados" no lançamento novo: as descrições que você repete (2 vezes ou mais) aparecem como botões e preenchem descrição, valor, conta e categoria de uma vez.' },
+      { type: 'melhoria', text: '"Repetir último" agora fica junto dos atalhos "Mais usados", logo acima do formulário.' },
+    ],
+  },
+  {
     version: '1.2.0',
     date: '2026-10-08',
     title: 'Lançamento mais rápido e Painel comparativo',

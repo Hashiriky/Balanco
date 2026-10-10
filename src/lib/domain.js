@@ -217,12 +217,21 @@ export const cardAvailable = (card, txs) => Math.max((card.limit || 0) - cardUse
 /* ---------- Orçamento ---------- */
 export function budgetRows({ budgets, txs, categories, key }) {
   const idx = categoryIndex(categories);
-  const spentByRoot = new Map(byCategory(txs.filter((t) => inMonth(t, key)), categories, { type: 'expense', level: 'root', includePending: true }).map((r) => [r.categoryId, r.amount]));
+  const rootCache = new Map(); // gasto por grupo de categoria, por mês (evita recalcular)
+  const rootSpent = (k) => { if (!rootCache.has(k)) rootCache.set(k, new Map(byCategory(txs.filter((t) => inMonth(t, k)), categories, { type: 'expense', level: 'root', includePending: true }).map((r) => [r.categoryId, r.amount]))); return rootCache.get(k); };
+  const spentIn = (b, c, k) => (c && !c.parentId ? (rootSpent(k).get(c.id) || 0) : sum(txs.filter((t) => inMonth(t, k) && t.type === 'expense' && t.categoryId === b.categoryId), (t) => t.amount));
+  /* sobra acumulada: o que não foi gasto em cada mês (desde rolloverFrom) soma ao limite do mês seguinte */
+  const carryFor = (b, c) => {
+    if (!b.rollover || !b.rolloverFrom || b.rolloverFrom >= key) return 0;
+    let carry = 0, k = b.rolloverFrom, guard = 0;
+    while (k < key && guard++ < 36) { carry = Math.max(0, b.amount + carry - spentIn(b, c, k)); k = shiftMonth(k, 1); }
+    return carry;
+  };
   return budgets.map((b) => {
     const c = idx.get(b.categoryId);
-    const spent = c && !c.parentId ? (spentByRoot.get(c.id) || 0) : sum(txs.filter((t) => inMonth(t, key) && t.type === 'expense' && t.categoryId === b.categoryId), (t) => t.amount);
-    const pct = b.amount > 0 ? (spent / b.amount) * 100 : 0;
-    return { budget: b, category: c, limit: b.amount, spent, left: b.amount - spent, pct, level: spent > b.amount ? 'over' : pct >= 85 ? 'high' : 'ok' };
+    const spent = spentIn(b, c, key), carry = carryFor(b, c), limit = b.amount + carry;
+    const pct = limit > 0 ? (spent / limit) * 100 : 0;
+    return { budget: b, category: c, base: b.amount, carry, limit, spent, left: limit - spent, pct, level: spent > limit ? 'over' : pct >= 85 ? 'high' : 'ok' };
   }).filter((r) => r.category).sort((a, b) => b.pct - a.pct);
 }
 

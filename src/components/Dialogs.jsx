@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { AccountName, CategoryLabel, StatusTag, TxAmount, useLookups } from '@/components/pages/shared.jsx';
 import { AccountSelect, CategorySelect, WEEKDAY_OPTIONS } from '@/components/selects.jsx';
 import { Choice, Field, Icon, Modal, Money, MoneyInput, Tag } from '@/components/ui.jsx';
-import { ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
-import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, bankOf, canBePrimary, defaultAccountId, invoiceMonthOf, primaryAccount } from '@/lib/domain.js';
+import { ACCOUNT_COLORS, ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
+import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, bankOf, canBePrimary, categoryPath, defaultAccountId, invoiceMonthOf, primaryAccount } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
@@ -280,6 +280,46 @@ export function YieldBatchDialog({ onClose }) {
   );
 }
 
+/* ---------- Busca global ---------- */
+export function SearchDialog({ onClose }) {
+  const { data } = useStore();
+  const ui = useUI();
+  const lk = useLookups();
+  const [q, setQ] = useState('');
+  const { shown, total } = useMemo(() => {
+    const terms = norm(q).split(/\s+/).filter(Boolean);
+    if (!terms.length) return { shown: [], total: 0 };
+    const found = data.transactions.filter((t) => {
+      const text = norm(`${t.description} ${t.categoryId ? categoryPath(t.categoryId, lk.cat) : ''} ${lk.acc.get(t.accountId)?.name || ''} ${t.notes || ''} ${fmtMoney(t.amount)} ${centsToField(t.amount)} ${t.date}`);
+      return terms.every((w) => text.includes(w));
+    }).sort((a, b) => b.date.localeCompare(a.date));
+    return { shown: found.slice(0, 40), total: found.length };
+  }, [q, data.transactions, lk]);
+  return (
+    <Modal title="Buscar lançamentos" size="lg" onClose={onClose}>
+      <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} data-autofocus placeholder="Descrição, valor, conta ou categoria…" aria-label="Buscar lançamentos" />
+      {!q.trim() && <p className="help">Digite para procurar em todos os lançamentos. Dá para combinar palavras, por exemplo “mercado 50”.</p>}
+      {q.trim() && !total && <p className="muted">Nenhum lançamento encontrado.</p>}
+      {total > 0 && (
+        <>
+          <ul className="search-results">
+            {shown.map((t) => (
+              <li key={t.id}>
+                <button type="button" className="search-item" onClick={() => { onClose(); ui.open('txView', { tx: t }); }}>
+                  <span className="w-date">{fmtDate(t.date)}</span>
+                  <span className="search-main">{t.description}<small className="muted"> · {lk.acc.get(t.accountId)?.name || '—'}{t.categoryId ? ` · ${categoryPath(t.categoryId, lk.cat)}` : ''}</small></span>
+                  <TxAmount t={t} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="help">{total > shown.length ? `Mostrando os ${shown.length} mais recentes de ${total} resultados. Refine a busca para ver outros.` : `${total} resultado${total === 1 ? '' : 's'}.`}</p>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 /* ---------- Lançamento ---------- */
 export function TxDialog({ tx, preset = {}, onClose }) {
   const { data, upsert, remove, setViewMonth } = useStore();
@@ -340,6 +380,25 @@ export function TxDialog({ tx, preset = {}, onClose }) {
     if (data.accounts.some((a) => a.id === last.accountId && !a.archived)) setAccountId(last.accountId);
     setToAccountId(last.type === 'transfer' ? last.toAccountId || '' : ''); setCategoryId(last.type === 'transfer' ? '' : last.categoryId || ''); setErrors({});
   };
+  /* "Mais usados": descrições que você repete (2 vezes ou mais), do tipo escolhido, com os dados do uso mais recente */
+  const frequent = useMemo(() => {
+    if (editing) return [];
+    const map = new Map();
+    for (const t of data.transactions) {
+      if (t.isYield || t.recurrenceId || t.type === 'transfer' || t.type !== type) continue;
+      const desc = String(t.description || '').replace(/ \(\d+\/\d+\)$/, '').trim();
+      if (!desc) continue;
+      const k = norm(desc), cur = map.get(k) || { n: 0, desc, last: t };
+      cur.n += 1;
+      if (String(t.createdAt || t.date) > String(cur.last.createdAt || cur.last.date)) cur.last = t;
+      map.set(k, cur);
+    }
+    return [...map.values()].filter((e) => e.n >= 2).sort((a, b) => b.n - a.n || a.desc.localeCompare(b.desc, 'pt-BR')).slice(0, 6);
+  }, [editing, type, data.transactions]);
+  const fillFrequent = (e) => {
+    setDescription(e.desc); setAmount(centsToField(e.last.amount)); setCategoryId(e.last.categoryId || ''); setErrors({});
+    if (data.accounts.some((a) => a.id === e.last.accountId && !a.archived)) setAccountId(e.last.accountId);
+  };
   const del = async (close) => {
     const sib = tx.installment ? data.transactions.filter((x) => x.installment?.group === tx.installment.group) : [];
     const res = await ui.confirm({ title: 'Excluir lançamento', danger: true, okLabel: sib.length > 1 ? 'Só esta parcela' : 'Excluir', extraLabel: sib.length > 1 ? `Todas as ${sib.length} parcelas` : '',
@@ -356,7 +415,12 @@ export function TxDialog({ tx, preset = {}, onClose }) {
         {editing && <button type="button" className="btn btn-secondary" onClick={() => { close(); setTimeout(() => ui.open('tx', { preset: { ...tx, id: undefined, date: todayISO(), installment: undefined, recurrenceId: undefined, recurrenceDate: undefined, externalId: undefined } }), 0); }}>Duplicar</button>}
         <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button>{!editing && <button type="button" className="btn btn-secondary" onClick={() => save(close, true)}>Salvar e novo</button>}<button type="submit" className="btn btn-primary">Salvar</button>
       </>)}>
-      {last && !description.trim() && !(cents > 0) && <button type="button" className="btn btn-secondary btn-sm" onClick={repeatLast} title={`${last.description} · ${fmtMoney(last.amount)}`}>Repetir último lançamento</button>}
+      {!editing && !description.trim() && !(cents > 0) && (last || frequent.length > 0) && (
+        <div className="quick-row" aria-label="Atalhos de preenchimento">
+          {last && <button type="button" className="btn btn-secondary btn-sm" onClick={repeatLast} title={`${last.description} · ${fmtMoney(last.amount)}`}>Repetir último</button>}
+          {frequent.map((e) => <button key={e.desc} type="button" className="btn btn-ghost btn-sm quick-chip" onClick={() => fillFrequent(e)} title={`${e.desc} · ${fmtMoney(e.last.amount)} · usado ${e.n}×`}>{e.desc}</button>)}
+        </div>
+      )}
       <Choice name="txType" value={type} onChange={changeType} options={[{ value: 'expense', label: 'Despesa' }, { value: 'income', label: 'Receita' }, { value: 'transfer', label: 'Transferência' }]} />
       <Field label="Descrição" error={errors.description}><input className="input" value={description} maxLength={80} onChange={(e) => setDescription(e.target.value)} id="tx-description" data-autofocus placeholder={type === 'transfer' ? 'Opcional' : 'Ex.: Supermercado, Salário…'} aria-label="Descrição" /></Field>
       <div className="grid-2">
@@ -430,6 +494,7 @@ export function AccountDialog({ account, presetType, onClose }) {
   const [closingDay, setClosingDay] = useState(String(account?.closingDay || 10));
   const [dueDay, setDueDay] = useState(String(account?.dueDay || 17));
   const [bank, setBank] = useState(account?.bank || '');
+  const [color, setColor] = useState(account?.color || '');
   const [primary, setPrimary] = useState(!!account?.primary);
   const [initialInvoice, setInitialInvoice] = useState(account?.initialInvoice || invoiceMonthOf(todayISO(), Number(account?.closingDay || 10)));
   const [errors, setErrors] = useState({});
@@ -447,7 +512,7 @@ export function AccountDialog({ account, presetType, onClose }) {
         const bal = parseMoney(balance) * (negative ? -1 : 1);
         const id = account?.id || uid(), isPrimary = primaryOk && primary;
         const others = isPrimary ? data.accounts.filter((a) => a.primary && a.id !== id).map((a) => ({ ...a, primary: false })) : [];
-        upsert('accounts', [{ ...(account || {}), id, name: name.trim(), type, bank: bank.trim(), primary: isPrimary, initialBalance: bal, archived: account?.archived || false, ...(credit ? { limit: parseMoney(limit), closingDay: Number(closingDay), dueDay: Number(dueDay), initialInvoice: /^\d{4}-\d{2}$/.test(initialInvoice) ? initialInvoice : invoiceMonthOf(todayISO(), Number(closingDay)) } : {}) }, ...others]);
+        upsert('accounts', [{ ...(account || {}), id, name: name.trim(), type, bank: bank.trim(), color, primary: isPrimary, initialBalance: bal, archived: account?.archived || false, ...(credit ? { limit: parseMoney(limit), closingDay: Number(closingDay), dueDay: Number(dueDay), initialInvoice: /^\d{4}-\d{2}$/.test(initialInvoice) ? initialInvoice : invoiceMonthOf(todayISO(), Number(closingDay)) } : {}) }, ...others]);
         toast(editing ? 'Conta atualizada.' : 'Conta criada.'); close();
       }}
       footer={(close) => (<>
@@ -458,6 +523,10 @@ export function AccountDialog({ account, presetType, onClose }) {
       <Field label="Nome" error={errors.name}><input className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder={type === 'investment' ? 'Ex.: CDB Banco X, Tesouro Selic, Ações' : 'Ex.: Banco X, Carteira, Cartão Y'} data-autofocus aria-label="Nome" /></Field>
       <Field label="Tipo"><select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">{Object.entries(ACCOUNT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
       <Field label="Banco / instituição (opcional)" help="Serve para agrupar suas contas e cartões do mesmo banco."><input className="input" list="bank-options" value={bank} maxLength={40} onChange={(e) => setBank(e.target.value)} placeholder="Ex.: Nubank, Itaú, Mercado Pago" aria-label="Banco" /><datalist id="bank-options">{bankOptions.map((b) => <option key={b} value={b} />)}</datalist></Field>
+      <Field label="Cor (opcional)" help="Aparece ao lado do nome da conta nas listas, para reconhecer rápido."><div className="swatches" role="radiogroup" aria-label="Cor da conta">
+        <button type="button" role="radio" aria-checked={!color} className={cn('swatch', 'swatch-none', !color && 'on')} onClick={() => setColor('')} title="Sem cor" aria-label="Sem cor">∅</button>
+        {ACCOUNT_COLORS.map((c) => <button key={c} type="button" role="radio" aria-checked={color === c} className={cn('swatch', color === c && 'on')} style={{ background: c }} onClick={() => setColor(c)} title={c} aria-label={`Cor ${c}`} />)}
+      </div></Field>
       {primaryOk && <label className="check inline"><input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} /><span>Conta principal <small className="muted">— já vem escolhida nos lançamentos novos (só uma por vez)</small></span></label>}
       <div className="grid-2">
         <Field label={credit ? 'Dívida atual do cartão' : 'Saldo inicial'} help={credit ? 'Compras anteriores ainda não pagas (deixe zerado se não houver).' : type === 'investment' && editing ? 'Só pra corrigir o ponto de partida. Pra aportar mais dinheiro depois, lance uma transferência — editar aqui mistura com o rendimento já calculado.' : 'Quanto havia na conta antes do primeiro lançamento.'}><MoneyInput value={balance} onChange={setBalance} aria-label="Saldo inicial" /></Field>
@@ -562,6 +631,7 @@ export function BudgetDialog({ categoryId: editing, presetCategory, onClose }) {
   const cur = data.budgets.find((b) => b.categoryId === editing);
   const [categoryId, setCategoryId] = useState(editing || presetCategory || '');
   const [amount, setAmount] = useState(centsToField(cur?.amount));
+  const [rollover, setRollover] = useState(!!cur?.rollover);
   const [errors, setErrors] = useState({});
   const taken = data.budgets.map((b) => b.categoryId);
   return (
@@ -570,7 +640,7 @@ export function BudgetDialog({ categoryId: editing, presetCategory, onClose }) {
         const e = {}, cents = parseMoney(amount);
         if (!categoryId) e.categoryId = 'Escolha a categoria.'; if (!(cents > 0)) e.amount = 'Informe um limite maior que zero.';
         setErrors(e); if (hasErrors(e)) return;
-        upsert('budgets', { id: categoryId, categoryId, amount: cents }); toast('Orçamento salvo.'); close();
+        upsert('budgets', { id: categoryId, categoryId, amount: cents, rollover, rolloverFrom: rollover ? (cur?.rolloverFrom || monthKey(new Date())) : undefined }); toast('Orçamento salvo.'); close();
       }}
       footer={(close) => (<>
         {editing && <button type="button" className="btn btn-danger-outline" onClick={async () => { if (await ui.confirm({ title: 'Remover orçamento', danger: true, okLabel: 'Remover', message: 'O limite será removido. Os lançamentos continuam intactos.' })) { remove('budgets', [cur]); close(); toast('Orçamento removido.'); } }}><Icon name="trash" />Remover</button>}
@@ -578,6 +648,7 @@ export function BudgetDialog({ categoryId: editing, presetCategory, onClose }) {
       </>)}>
       <Field label="Categoria" error={errors.categoryId} help="Um orçamento no grupo (ex.: Moradia) soma todas as subcategorias."><CategorySelect type="expense" value={categoryId} onChange={setCategoryId} exclude={taken.filter((t) => t !== editing)} data-autofocus aria-label="Categoria" /></Field>
       <Field label="Limite mensal" error={errors.amount}><MoneyInput value={amount} onChange={setAmount} aria-label="Limite mensal" /></Field>
+      <label className="check inline"><input type="checkbox" checked={rollover} onChange={(e) => setRollover(e.target.checked)} /><span>Levar a sobra para o mês seguinte <small className="muted">— o que não for gasto soma ao limite do próximo mês (conta a partir deste mês)</small></span></label>
     </Modal>
   );
 }

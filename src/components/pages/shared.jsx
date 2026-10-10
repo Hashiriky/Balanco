@@ -13,7 +13,11 @@ export function CategoryLabel({ id, lk }) {
   const c = lk.cat.get(id); const root = c ? rootOf(id, lk.cat) : null;
   return <span className="cat-label"><i className="dot" style={{ background: root?.color || '#94a3b8' }} />{categoryPath(id, lk.cat)}</span>;
 }
-export const AccountName = ({ id, lk }) => lk.acc.get(id)?.name || '—';
+export function AccountName({ id, lk }) {
+  const a = lk.acc.get(id);
+  if (!a) return '—';
+  return <span className="acc-label">{a.color && <i className="acc-dot" style={{ background: a.color }} />}{a.name}</span>;
+}
 export function TxAmount({ t }) {
   if (t.type === 'transfer') return <span className="num muted">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.amount / 100)}</span>;
   return <Money cents={t.type === 'income' ? t.amount : -t.amount} tone="auto" />;

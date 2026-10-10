@@ -83,7 +83,7 @@ export default function Accounts() {
             <tbody>{groups.flatMap((g) => {
               const line = (r) => (
                 <tr key={r.account.id} className={r.account.archived ? 'muted click' : 'click'} onClick={() => ui.open('accountView', { account: r.account })}>
-                  <td>{r.account.name}{r.account.primary && <Tag tone="ok">Principal</Tag>}{r.account.archived && <Tag>Arquivada</Tag>}</td>
+                  <td><span className="acc-label">{r.account.color && <i className="acc-dot" style={{ background: r.account.color }} />}{r.account.name}</span>{r.account.primary && <Tag tone="ok">Principal</Tag>}{r.account.archived && <Tag>Arquivada</Tag>}</td>
                   <td>{ACCOUNT_TYPES[r.account.type]}{isCredit(r.account) && <small className="muted"> · limite {fmtMoney(r.account.limit)}</small>}</td>
                   <td className="num"><Money cents={r.current} tone="auto" /></td><td className="num"><Money cents={r.forecast} tone="auto" /></td>
                   <td className="w-act"><button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); ui.open('account', { account: r.account }); }}>Editar</button></td>

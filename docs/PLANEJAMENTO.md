@@ -43,27 +43,31 @@ Aplicativo web de **finanças pessoais** para o Brasil. Este documento define o 
 11. **Carteira**: contas de investimento separadas das contas comuns; aporte/resgate (transferências), atualização de rendimento (individual ou de todos de uma vez), % acumulado e gráfico de 12 meses.
 12. **Dados**: backup completo (JSON) e restauração, exportação CSV, apagar todos os dados.
 
-### Versão 2 (planejada)
-Metas de poupança ligadas a contas · Cotações na carteira de investimentos · Anexos (comprovantes) · Etiquetas e centros de custo · Conciliação bancária (marcar "conferido") · Orçamento por mês (com sobra acumulada) · Lembretes por e-mail · Relatório em PDF · Multiusuário/compartilhar com família · Aplicativo instalável (PWA offline).
+### Versão 2 (em andamento)
+Já feito: orçamento com sobra acumulada (opcional por categoria) · relatório em PDF (impressão) · busca global · conta principal, bancos e cor por conta · tela de Novidades (histórico de versões em `src/lib/changelog.js`).
+
+Ainda planejado: metas de poupança ligadas a contas · conciliação bancária (marcar "conferido") · etiquetas e centros de custo · anexos (comprovantes) · lembretes por e-mail · cotações na carteira de investimentos. A lista completa e atualizada está no `README.md`.
 
 ### Fora do escopo
 Multimoeda · Open Finance (integração direta com bancos) · Emissão de boletos/pagamentos · Declaração de imposto de renda.
 
 ## 4. Telas e navegação
 
-Navegação em **barra inferior fixa**, sólida, com rótulos (sem menu lateral e sem barra no topo):
+Navegação em **barra lateral retrátil** no computador (gaveta no celular), com rótulos:
 
-`Painel · Lançamentos · Agenda · Contas · Orçamento · Relatórios · Mais (Importar, Ajustes, Sair)`
+`Buscar · Painel · Lançamentos · Agenda · Contas · Carteira · Orçamento · Relatórios · Importar extrato · Novidades · Ajustes`
+
+O Balanço é um **site** (web): não há app instalável, então PWA e modo offline não fazem parte do escopo.
 
 Cada tela tem título, seletor de mês quando faz sentido e o botão principal à direita. Formulários em janela central; validação abaixo de cada campo; confirmação para tudo que apaga.
 
 ## 5. Modelo de dados (Firestore: `users/{uid}/{coleção}/{id}`)
 
-- `accounts`: id, name, type, initialBalance (centavos), limit, closingDay, dueDay (só cartão), archived
+- `accounts`: id, name, type, initialBalance (centavos), limit, closingDay, dueDay (só cartão), archived, bank, color (#rrggbb), primary (só corrente, poupança ou dinheiro)
 - `categories`: id, name, type (`expense`/`income`), parentId, color, archived
 - `transactions`: id, type, amount (centavos, sempre positivo), date, description, accountId, toAccountId, categoryId, status (`paid`/`pending`), notes, installment {group, number, total}, recurrenceId, recurrenceMonth, invoiceMonth, externalId
 - `recurrences`: id, description, amount, type, accountId, categoryId, freq, day, startMonth, endMonth, active
-- `budgets`: id (= id da categoria), categoryId, amount
+- `budgets`: id (= id da categoria), categoryId, amount, rollover e rolloverFrom (sobra acumulada, opcional)
 - `rules`: id, contains, categoryId
 
 ## 6. Regras de negócio importantes

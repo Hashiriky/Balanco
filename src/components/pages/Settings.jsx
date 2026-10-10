@@ -48,13 +48,20 @@ function DataTab() {
   const ui = useUI();
   const [mode, setMode] = useState('merge'); const [word, setWord] = useState('');
   const file = useRef(null);
+  /* cópia de segurança automática: baixada antes de qualquer ação que apaga dados (se houver dados) */
+  const safetyCopy = () => {
+    if (!data.accounts.length && !data.transactions.length) return false;
+    download(`balanco-backup-antes-de-apagar-${todayISO()}.json`, JSON.stringify(buildBackup(data), null, 2), 'application/json');
+    return true;
+  };
   const onFile = async (f) => {
     if (!f) return;
     try {
       const raw = JSON.parse(await f.text());
       if (mode === 'replace' && !(await ui.confirm({ title: 'Substituir todos os dados?', danger: true, okLabel: 'Substituir', message: 'Todos os dados atuais serão trocados pelos do arquivo. Faça um backup antes se tiver dúvida.' }))) return;
+      const saved = mode === 'replace' && safetyCopy();
       const c = importBackup(raw, mode);
-      toast(`Importado: ${c.transactions} lançamentos, ${c.accounts} contas, ${c.categories} categorias, ${c.recurrences} recorrências.`, { ttl: 6000 });
+      toast(`Importado: ${c.transactions} lançamentos, ${c.accounts} contas, ${c.categories} categorias, ${c.recurrences} recorrências.${saved ? ' Uma cópia dos dados anteriores foi baixada.' : ''}`, { ttl: 8000 });
     } catch (e) { toastError(e instanceof SyntaxError ? 'Arquivo inválido: não é um JSON.' : e.message); } finally { if (file.current) file.current.value = ''; }
   };
   return (
@@ -75,7 +82,7 @@ function DataTab() {
       <Card title="Apagar todos os dados">
         <Alert tone="danger">Esta ação apaga contas, lançamentos, recorrências, orçamentos e regras. Não há como desfazer.</Alert>
         <div className="btn-row"><Field label="Digite APAGAR para confirmar"><input className="input" value={word} onChange={(e) => setWord(e.target.value)} aria-label="Confirmação" /></Field>
-          <button type="button" className="btn btn-danger" disabled={word !== 'APAGAR'} onClick={() => { eraseAll(); setWord(''); toast('Todos os dados foram apagados.'); }}>Apagar tudo</button></div>
+          <button type="button" className="btn btn-danger" disabled={word !== 'APAGAR'} onClick={() => { const saved = safetyCopy(); eraseAll(); setWord(''); toast(`Todos os dados foram apagados.${saved ? ' Uma cópia de segurança foi baixada.' : ''}`, { ttl: 8000 }); }}>Apagar tudo</button></div>
       </Card>
     </>
   );

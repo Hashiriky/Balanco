@@ -19,6 +19,8 @@ export function cleanAccount(a) {
   if (!a || !a.name) return null;
   const type = ACCOUNT_TYPES[a.type] ? a.type : 'checking';
   const out = { ...a, id: str(a.id) || uid(), name: str(a.name).trim(), type, initialBalance: int(a.initialBalance), archived: !!a.archived };
+  const color = /^#[0-9a-f]{6}$/i.test(str(a.color)) ? str(a.color).toLowerCase() : '';
+  if (color) out.color = color; else delete out.color;
   const bank = str(a.bank).trim().slice(0, 40);
   if (bank) out.bank = bank; else delete out.bank;
   if (a.primary && ['checking', 'savings', 'cash'].includes(type)) out.primary = true; else delete out.primary;
@@ -46,7 +48,13 @@ export function cleanRecurrence(r) {
   return { ...r, id: str(r.id) || uid(), description: str(r.description).trim(), amount: Math.abs(int(r.amount)), type: r.type === 'income' ? 'income' : 'expense', accountId: str(r.accountId),
     categoryId: r.categoryId ? str(r.categoryId) : null, freq, day: freq === 'weekly' ? Math.min(6, Math.max(0, parseInt(r.day, 10) || 0)) : day(r.day), startMonth: monthOrNull(r.startMonth) || monthKey(new Date()), endMonth: monthOrNull(r.endMonth), active: r.active !== false };
 }
-export const cleanBudget = (b) => { const cid = b && (b.categoryId || b.id); return cid && int(b.amount) > 0 ? { id: str(cid), categoryId: str(cid), amount: int(b.amount) } : null; };
+export const cleanBudget = (b) => {
+  const cid = b && (b.categoryId || b.id);
+  if (!(cid && int(b.amount) > 0)) return null;
+  const out = { id: str(cid), categoryId: str(cid), amount: int(b.amount) };
+  if (b.rollover && /^\d{4}-\d{2}$/.test(str(b.rolloverFrom))) { out.rollover = true; out.rolloverFrom = str(b.rolloverFrom); } // sobra acumulada
+  return out;
+};
 export const cleanRule = (r) => (r && str(r.contains).trim() && r.categoryId ? { ...r, id: str(r.id) || uid(), contains: str(r.contains).trim(), categoryId: str(r.categoryId) } : null);
 
 const CLEANERS = { accounts: cleanAccount, categories: cleanCategory, transactions: cleanTx, recurrences: cleanRecurrence, budgets: cleanBudget, rules: cleanRule };

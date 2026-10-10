@@ -8,7 +8,7 @@ Finanças pessoais em Next.js 15 + React 19 + Firebase. Este documento reúne o 
 
 ## 1. Estado atual
 
-> **Versão 1.2.0** (08/10/2026): "Salvar e novo", "Repetir último lançamento", atalhos `N` e `/`, comparação com o mês anterior no Painel e contraste dos títulos de banco. A 1.1.0 trouxe conta Principal, campo Banco, Contas agrupadas por banco e a tela **Novidades** (changelog). O que mudou em cada versão está no menu, em *Novidades*, e no arquivo `src/lib/changelog.js`. **Para registrar uma mudança nova, é só acrescentar uma entrada no topo desse arquivo.**
+> **Versão 1.6.0** (10/10/2026): novo seletor de período em Lançamentos e Relatórios (atalhos + calendário de intervalo). A 1.5.0 trouxe: orçamento com sobra acumulada, cor por conta e documentação atualizada. O Balanço é **só web** (sem app/PWA). A 1.4.0 trouxe: busca global (`/`), PDF dos relatórios, cópia de segurança automática antes de apagar/substituir dados e rolagem travada atrás das janelas. A 1.3.0 trouxe: formulários não fecham mais ao clicar fora (Esc pergunta antes de descartar) e atalhos "Mais usados" no lançamento. A 1.2.0 trouxe: "Salvar e novo", "Repetir último lançamento", atalhos `N` e `/`, comparação com o mês anterior no Painel e contraste dos títulos de banco. A 1.1.0 trouxe conta Principal, campo Banco, Contas agrupadas por banco e a tela **Novidades** (changelog). O que mudou em cada versão está no menu, em *Novidades*, e no arquivo `src/lib/changelog.js`. **Para registrar uma mudança nova, é só acrescentar uma entrada no topo desse arquivo.**
 
 O app está mais completo do que o planejamento sugere. Já existem:
 
@@ -22,19 +22,17 @@ O app está mais completo do que o planejamento sugere. Já existem:
 | Planejamento diz | Código faz |
 | --- | --- |
 | Navegação em barra inferior fixa, sem menu lateral | Barra lateral retrátil no computador e gaveta no celular |
-| Metas, PWA offline, relatório PDF na V2 | Ainda não existem (ver plano) |
+| Metas, PWA offline, relatório PDF na V2 | Parte já existe (ver plano) |
 
 ---
 
 ## 2. Pontos de atenção (verificados no código)
 
-1. **Sem modo offline de verdade.** Não há service worker nem cache local do Firestore. O `manifest.js` só tem ícone SVG, e a instalação como app costuma pedir PNG 192/512.
-2. **Restaurar/importar backup pode apagar dados na nuvem.** `syncAll` deixa o Firestore idêntico ao estado local, apagando o que não estiver nele. Além disso, grava em lotes de 400, que não são atômicos: uma falha no meio deixa o estado misturado. A confirmação existe, mas não há cópia automática antes.
-3. **Alertas só aparecem dentro do app.** Se você não abrir o Painel, não é avisado de fatura nem de conta atrasada.
-4. **Regras do Firestore só checam o usuário.** Não validam tipo nem tamanho dos campos.
-5. **`.env.example` é citado em `cloud.js`, mas não veio no zip.**
-6. **Gráficos dependem de ponteiro** (hover/toque) para mostrar valores. Quem usa só teclado não acessa os números.
-7. **Testes cobrem só `domain` e `importers`.** Store, sincronização e telas não têm teste.
+1. **Restaurar/importar backup pode apagar dados na nuvem.** `syncAll` deixa o Firestore idêntico ao estado local, apagando o que não estiver nele. Além disso, grava em lotes de 400, que não são atômicos: uma falha no meio deixa o estado misturado. Desde a 1.4.0 o app baixa uma cópia de segurança automática antes de substituir ou apagar tudo; falta só a pré-visualização do que será apagado.
+2. **Alertas só aparecem dentro do app.** Se você não abrir o Painel, não é avisado de fatura nem de conta atrasada.
+3. **Regras do Firestore só checam o usuário.** Não validam tipo nem tamanho dos campos.
+4. **Gráficos dependem de ponteiro** (hover/toque) para mostrar valores. Quem usa só teclado não acessa os números.
+5. **Testes cobrem `domain`, `importers`, contas e orçamento (38 testes).** Store, sincronização e telas ainda não têm teste.
 
 ---
 
@@ -43,8 +41,8 @@ O app está mais completo do que o planejamento sugere. Já existem:
 Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** grande.
 
 ### Fase 1 — Segurança e confiança nos dados
-- [ ] **(P)** Criar o `.env.example` (as chaves do Firebase hoje ficam como padrão dentro de `cloud.js`).
-- [ ] **(P)** Baixar um backup automático (ou guardar em memória para "Desfazer") antes de **Restaurar** e antes de **Apagar tudo**.
+- [x] **(P)** Criar o `.env.example` (as chaves do Firebase hoje ficam como padrão dentro de `cloud.js`). *Feito na 1.5.0.*
+- [x] **(P)** Baixar um backup automático (ou guardar em memória para "Desfazer") antes de **Restaurar** e antes de **Apagar tudo**. *Feito na 1.4.0.*
 - [ ] **(M)** Reforçar `firestore.rules`: validar tipos dos campos (`amount` inteiro, `date` no formato `AAAA-MM-DD`, tamanho máximo de texto).
 - [ ] **(P)** Exigir verificação de e-mail no cadastro e senha mais forte que o mínimo de 6.
 - [ ] **(M)** Tornar `syncAll` mais seguro: comparar antes de apagar e mostrar um resumo ("vai apagar X e gravar Y") antes de confirmar.
@@ -52,37 +50,37 @@ Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** gra
 ### Fase 2 — Uso no dia a dia
 - [x] **(P)** Botão **"Salvar e novo"** no lançamento e **"Repetir último"**.
 - [x] **(P)** Atalhos de teclado discretos (`N` = novo lançamento, `/` = busca). Sem paleta de comandos.
-- [ ] **(M)** **Modelos de lançamento** (café, mercado, combustível) para preencher em um toque.
-- [ ] **(M)** **Busca global** (descrição, valor, categoria) acessível de qualquer tela.
+- [x] **(M)** **Modelos de lançamento** (café, mercado, combustível) para preencher em um toque. *Feito na 1.3.0 de forma automática: os lançamentos que você mais repete viram botões "Mais usados". Modelos salvos à mão ficam para depois.*
+- [x] **(M)** **Busca global** (descrição, valor, categoria) acessível de qualquer tela. *Feito na 1.4.0.*
+- [x] **(M)** **Seletor de período** (atalhos + calendário de intervalo) em Lançamentos e Relatórios, que antes só tinham opções fixas. *Feito na 1.6.0.*
 - [x] **(P)** No Painel, comparar com o **mês anterior** (receitas, despesas, resultado).
-- [ ] **(M)** **Orçamento por mês com sobra acumulada** (já previsto na V2).
+- [x] **(M)** **Orçamento por mês com sobra acumulada** (já previsto na V2). *Feito na 1.5.0 (opcional em cada orçamento).*
 
 ### Fase 3 — Recursos novos (V2 do planejamento)
 - [ ] **(M)** **Metas de poupança** ligadas a contas, com progresso e prazo.
 - [ ] **(M)** **Conciliação:** marcar lançamentos como "conferidos" e comparar com o saldo real do banco.
-- [ ] **(P)** **Relatório em PDF** usando o CSS de impressão que já existe (`@media print`), com um botão "Imprimir/Salvar PDF".
+- [x] **(P)** **Relatório em PDF** usando o CSS de impressão que já existe (`@media print`), com um botão "Imprimir/Salvar PDF". *Feito na 1.4.0.*
 - [ ] **(M)** **Etiquetas / centros de custo** além das categorias.
 - [ ] **(G)** **Anexos** (comprovantes) com Firebase Storage.
 - [ ] **(G)** **Lembretes por e-mail ou notificação** de fatura e vencimentos (resolve o ponto 4).
 - [ ] **(G)** **Compartilhar com família** (multiusuário).
 
-### Fase 4 — PWA e offline
-- [ ] **(P)** Ícones PNG 192/512 e `maskable` no manifest.
-- [ ] **(M)** Ativar o cache local do Firestore (persistência offline) e mostrar "Sem conexão, alterações serão enviadas depois".
-- [ ] **(M)** Service worker para abrir o app sem internet.
 
 ### Fase 5 — Acessibilidade e UI
 - [ ] **(M)** Dar acesso por teclado aos gráficos (foco nas barras ou uma tabela alternativa com os mesmos valores).
+- [x] **(P)** Travar a rolagem da página de trás quando há janela aberta. *Feito na 1.4.0.*
 - [x] **(P)** Aumentar o contraste dos títulos de banco na tela Contas (estavam quase da cor do fundo). *Feito na 1.2.0.*
-- [ ] **(P)** Respeitar `prefers-reduced-motion` e conferir contraste AA nas cores de status.
+- [x] **(P)** Formulários não fecham mais ao clicar fora; o Esc pergunta antes de descartar o que foi digitado. *Feito na 1.3.0.*
+- [x] **(P)** Respeitar `prefers-reduced-motion` (animações desligadas para quem pede). *Feito na 1.4.0.*
+- [x] **(P)** Conferir contraste AA nas cores de status. *Feito na 1.5.0: todas passam (mínimo 4,5).*
 - [ ] **(M)** Conferir no celular real: tabelas largas (Lançamentos, Relatórios) devem virar lista de cartões ou rolar sem quebrar a página.
-- [ ] **(P)** Tela de **primeiros passos** também nas telas vazias de Agenda, Orçamento e Carteira (hoje só o Painel tem).
+- [x] **(P)** Telas vazias de Agenda, Orçamento e Carteira. *Já existiam, com explicação e botão de ação; nada a fazer.*
 
 ### Fase 6 — Qualidade e manutenção
 - [ ] **(M)** Dividir `Dialogs.jsx` (~50 KB) em um arquivo por janela.
 - [ ] **(M)** Organizar `globals.css` (~29 KB) em seções ou módulos.
 - [ ] **(M)** Testes para `store.jsx` e `storage.js` (mesclar dados, restaurar backup) e para fatura com mudança de mês e ano.
-- [ ] **(P)** Atualizar o `docs/PLANEJAMENTO.md` (navegação lateral, o que já saiu da V2).
+- [x] **(P)** Atualizar o `docs/PLANEJAMENTO.md` (navegação lateral, o que já saiu da V2). *Feito na 1.5.0.*
 - [ ] **(P)** Adicionar lint (ESLint) e rodar `npm test` + `next build` antes de publicar.
 
 ---
@@ -108,7 +106,7 @@ Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** gra
 - [x] **(P) Campo "Banco / instituição"** na conta (texto livre com sugestões: Nubank, Itaú, Mercado Pago, etc.). Contas antigas ficam sem banco e continuam funcionando.
 - [x] **(P) Seletor de conta com grupos:** a principal primeiro (com uma estrela), depois as outras agrupadas por banco; cartões em um grupo próprio.
 - [x] **(M) Tela Contas agrupada por banco**, com o total de cada banco e o selo "Principal" bem visível. Um banco pode ter conta corrente e cartão juntos.
-- [ ] **(P) Cor ou ícone por conta/banco** para reconhecer rápido nas listas e nos lançamentos.
+- [x] **(P) Cor ou ícone por conta/banco** para reconhecer rápido nas listas e nos lançamentos. *Feito na 1.5.0 (cor).*
 - [x] **Loja e pessoal:** decidido que não precisa separar. Tudo que entra da loja é seu, então basta uma **categoria de receita** (por exemplo "Loja") e, se quiser, outra para o freelance. Nada de etiquetas ou centros de custo por enquanto.
 
 **Detalhes a decidir:**

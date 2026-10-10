@@ -3,13 +3,13 @@
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import AuthScreen from '@/components/Auth.jsx';
-import { AccountDialog, AccountViewDialog, BudgetDialog, CategoryDialog, CategoryPickerDialog, ConfirmDialog, PayInvoiceDialog, RecurrenceDialog, RuleDialog, SettleDialog, TxDialog, TxViewDialog, YieldBatchDialog, YieldUpdateDialog } from '@/components/Dialogs.jsx';
+import { AccountDialog, AccountViewDialog, BudgetDialog, CategoryDialog, CategoryPickerDialog, ConfirmDialog, PayInvoiceDialog, RecurrenceDialog, RuleDialog, SearchDialog, SettleDialog, TxDialog, TxViewDialog, YieldBatchDialog, YieldUpdateDialog } from '@/components/Dialogs.jsx';
 import Nav from '@/components/Nav.jsx';
 import { ToastHost } from '@/components/ui.jsx';
 import { StoreProvider, useStore } from '@/lib/store.jsx';
 import { UIProvider, useUI } from '@/lib/ui-context.jsx';
 
-const MODALS = { tx: TxDialog, txView: TxViewDialog, settle: SettleDialog, account: AccountDialog, accountView: AccountViewDialog, payInvoice: PayInvoiceDialog, recurrence: RecurrenceDialog, budget: BudgetDialog, category: CategoryDialog, categoryPicker: CategoryPickerDialog, rule: RuleDialog, confirm: ConfirmDialog, yieldUpdate: YieldUpdateDialog, yieldBatch: YieldBatchDialog };
+const MODALS = { search: SearchDialog, tx: TxDialog, txView: TxViewDialog, settle: SettleDialog, account: AccountDialog, accountView: AccountViewDialog, payInvoice: PayInvoiceDialog, recurrence: RecurrenceDialog, budget: BudgetDialog, category: CategoryDialog, categoryPicker: CategoryPickerDialog, rule: RuleDialog, confirm: ConfirmDialog, yieldUpdate: YieldUpdateDialog, yieldBatch: YieldBatchDialog };
 function ModalHost() {
   const { stack, close } = useUI();
   return stack.map((m) => { const C = MODALS[m.type]; return C ? <C key={m.id} {...m.props} onClose={() => close(m.id)} /> : null; });
@@ -26,7 +26,7 @@ function Inner({ children }) {
       const t = e.target, tag = String(t?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
       if (e.key === 'n' || e.key === 'N') { e.preventDefault(); open('tx', { preset: { type: 'expense' } }); }
-      else if (e.key === '/') { const el = document.querySelector('main input[type="search"]'); if (el) { e.preventDefault(); el.focus(); } }
+      else if (e.key === '/') { e.preventDefault(); const el = document.querySelector('main input[type="search"]'); if (el) el.focus(); else open('search'); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);

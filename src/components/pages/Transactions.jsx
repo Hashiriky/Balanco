@@ -2,13 +2,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AccountName, CategoryLabel, StatusTag, TxAmount, TxDescription, useLookups } from '@/components/pages/shared.jsx';
 import { CategorySelect } from '@/components/selects.jsx';
+import PeriodPicker from '@/components/PeriodPicker.jsx';
 import { Card, Empty, Field, Icon, Money, PageHeader, Pagination } from '@/components/ui.jsx';
 import { categoryPath, rootOf } from '@/lib/domain.js';
+import { periodLabel } from '@/lib/period.js';
 import { transactionsToCSV } from '@/lib/storage.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
-import { addDaysISO, fmtDate, lastDayOfMonth, monthLabel, norm, sum, todayISO } from '@/lib/util.js';
+import { fmtDate, lastDayOfMonth, monthLabel, norm, sum, todayISO } from '@/lib/util.js';
 
 const SIZE = 50;
 function download(name, content) {
@@ -21,19 +23,15 @@ export default function Transactions() {
   const ui = useUI();
   const lk = useLookups();
   const today = todayISO();
-  const [period, setPeriod] = useState('month'); const [from, setFrom] = useState(''); const [to, setTo] = useState('');
+  const [custom, setCustom] = useState(null); // null = segue o mês escolhido no topo da página; senão, o período escolhido no seletor
   const [accountId, setAccountId] = useState(''); const [categoryId, setCategoryId] = useState(''); const [type, setType] = useState(''); const [status, setStatus] = useState(''); const [q, setQ] = useState('');
   const [sort, setSort] = useState({ by: 'date', dir: 'desc' }); const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(new Set()); const [bulkCat, setBulkCat] = useState('');
-  useEffect(() => { setPage(1); setSelected(new Set()); }, [period, from, to, accountId, categoryId, type, status, q, viewMonth, sort]);
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [custom, accountId, categoryId, type, status, q, viewMonth, sort]);
 
-  const range = useMemo(() => {
-    if (period === 'month') return [`${viewMonth}-01`, lastDayOfMonth(viewMonth)];
-    if (period === '30d') return [addDaysISO(today, -29), today];
-    if (period === 'year') return [`${viewMonth.slice(0, 4)}-01-01`, `${viewMonth.slice(0, 4)}-12-31`];
-    if (period === 'custom') return [from || '0000-01-01', to || '9999-12-31'];
-    return ['0000-01-01', '9999-12-31'];
-  }, [period, viewMonth, from, to, today]);
+  const monthRange = useMemo(() => ({ from: `${viewMonth}-01`, to: lastDayOfMonth(viewMonth) }), [viewMonth]);
+  const period = custom || monthRange; // período em uso (datas ISO; nulos = sem limite)
+  const range = useMemo(() => [period.from || '0000-01-01', period.to || '9999-12-31'], [period]);
   const list = useMemo(() => {
     const nq = norm(q);
     const inCat = (t) => { if (!categoryId) return true; const c = lk.cat.get(categoryId); return t.categoryId === categoryId || (c && !c.parentId && rootOf(t.categoryId, lk.cat)?.id === categoryId); };
@@ -63,11 +61,11 @@ export default function Transactions() {
     if (!(await ui.confirm({ title: 'Excluir lançamentos', danger: true, okLabel: `Excluir ${sel.length}`, message: `${sel.length} lançamento(s) selecionado(s) serão excluídos.` }))) return;
     const removed = remove('transactions', sel); setSelected(new Set()); toast(`${removed.length} lançamento(s) excluído(s).`, { ttl: 6000, action: { label: 'Desfazer', run: () => upsert('transactions', removed) } });
   };
-  const subtitle = period === 'month' ? monthLabel(viewMonth) : period === 'year' ? viewMonth.slice(0, 4) : period === '30d' ? 'Últimos 30 dias' : period === 'all' ? 'Todo o período' : 'Período personalizado';
+  const subtitle = custom ? periodLabel(custom, today) : monthLabel(viewMonth);
 
   return (
     <>
-      <PageHeader title="Lançamentos" subtitle={subtitle} month={period === 'month' || period === 'year'}>
+      <PageHeader title="Lançamentos" subtitle={subtitle} month={!custom}>
         <button type="button" className="btn btn-secondary" onClick={() => download(`lancamentos-${todayISO()}.csv`, transactionsToCSV(list, data.accounts, data.categories))}><Icon name="download" />Exportar CSV</button>
         <button type="button" className="btn btn-primary" onClick={() => ui.open('tx', { preset: { type: 'expense' } })}>Nova despesa</button>
         <button type="button" className="btn btn-primary" onClick={() => ui.open('tx', { preset: { type: 'income' } })}>Nova receita</button>
@@ -75,8 +73,7 @@ export default function Transactions() {
       </PageHeader>
       <Card className="filters">
         <div className="filter-row">
-          <Field label="Período"><select className="select" value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Período"><option value="month">Mês selecionado</option><option value="30d">Últimos 30 dias</option><option value="year">Ano do mês selecionado</option><option value="all">Todo o período</option><option value="custom">Personalizado…</option></select></Field>
-          {period === 'custom' && <><Field label="De"><input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="De" /></Field><Field label="Até"><input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Até" /></Field></>}
+          <div className="field"><span className="label">Período</span><PeriodPicker value={period} onChange={setCustom} onReset={() => setCustom(null)} resetLabel="Voltar ao mês selecionado" /></div>
           <Field label="Conta"><select className="select" value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="Conta"><option value="">Todas</option>{data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
           <Field label="Categoria"><CategorySelect value={categoryId} onChange={setCategoryId} includeArchived emptyLabel="Todas" aria-label="Categoria" /></Field>
           <Field label="Tipo"><select className="select" value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo"><option value="">Todos</option><option value="expense">Despesas</option><option value="income">Receitas</option><option value="transfer">Transferências</option></select></Field>

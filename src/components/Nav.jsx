@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui.jsx';
 import { LATEST_VERSION } from '@/lib/changelog.js';
 import { useStore } from '@/lib/store.jsx';
+import { useUI } from '@/lib/ui-context.jsx';
 import { cn } from '@/lib/util.js';
 
 export const ITEMS = [
@@ -23,6 +24,7 @@ export default function Nav() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const ui = useUI();
   const [hasNew, setHasNew] = useState(false); // há uma versão em Novidades que ainda não foi vista
   const menuRef = useRef(null);
 
@@ -63,7 +65,7 @@ export default function Nav() {
           </button>
           <button type="button" className="icon-btn nav-close" onClick={() => setMobileOpen(false)} aria-label="Fechar menu"><Icon name="x" size={18} /></button>
         </div>
-        <nav className="nav-links">{ITEMS.map(link)}<div className="nav-sep" />{MORE.map(link)}</nav>
+        <nav className="nav-links"><button type="button" className="nav-link" onClick={() => ui.open('search')} title={collapsed ? 'Buscar lançamentos (/)' : undefined}><Icon name="search" size={19} /><span className="side-label">Buscar</span><kbd className="side-label kbd">/</kbd></button>{ITEMS.map(link)}<div className="nav-sep" />{MORE.map(link)}</nav>
         <div className="sidebar-bottom" ref={menuRef}>
           {menuOpen && (
             <div className="side-menu" role="menu">
