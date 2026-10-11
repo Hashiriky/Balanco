@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, HBars } from '@/components/charts.jsx';
 import { AccountName, CategoryLabel, TxAmount, TxDescription, useLookups } from '@/components/pages/shared.jsx';
 import { Alert, Card, Empty, Kpi, Money, PageHeader, ProgressBar } from '@/components/ui.jsx';
-import { accountsOverview, agendaOfMonth, agendaSummary, budgetRows, buildAlerts, byCategory, cashflowSeries, categoryIndex, investmentsOverview, isCredit, isPaid, monthEndForecast, monthTotals, rootOf, upcoming } from '@/lib/domain.js';
+import { accountsOverview, agendaOfMonth, agendaSummary, budgetRows, buildAlerts, byCategory, cashflowSeries, categoryIndex, investmentsOverview, isCredit, isPaid, monthEndForecast, monthTotals, rootOf, upcoming, commitments, dailyAllowance } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
@@ -36,8 +36,9 @@ export default function Dashboard() {
     const idx = categoryIndex(categories);
     const cats = byCategory(txs.filter((t) => t.date.startsWith(viewMonth)), categories, { includePending: false }).slice(0, 7);
     const total = sum(byCategory(txs.filter((t) => t.date.startsWith(viewMonth)), categories, { includePending: false }), (c) => c.amount);
+    const fc = monthEndForecast({ accounts, txs, recurrences, today });
     return {
-      ov, real, prev, plan, agSum: agendaSummary(ag), forecast: monthEndForecast({ accounts, txs, recurrences, today }), series: cashflowSeries(txs, viewMonth, 12), total,
+      ov, real, prev, plan, agSum: agendaSummary(ag), forecast: fc, allowance: dailyAllowance(fc.projected, today), commit: commitments({ accounts, txs, recurrences, today, months: 6 }), series: cashflowSeries(txs, viewMonth, 12), total,
       inv: investmentsOverview(accounts, txs, today),
       cats: cats.map((c) => ({ id: c.categoryId, value: c.amount, label: idx.get(c.categoryId)?.name || 'Sem categoria', color: rootOf(c.categoryId, idx)?.color || '#94a3b8' })),
       next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
@@ -78,8 +79,18 @@ export default function Dashboard() {
       </div>
       {isCurrent && (
         <div className="forecast">
-          <span>Saldo previsto para o fim de {monthLabel(viewMonth).split(' ')[0].toLowerCase()}: <strong><Money cents={v.forecast.projected} tone="auto" /></strong></span>
-          <span className="muted">= saldo disponível {fmtMoney(v.forecast.assets)} + a receber {fmtMoney(v.forecast.receivable)} − a pagar {fmtMoney(v.forecast.payable)}{v.inv.rows.length > 0 ? ' (não conta o investido)' : ''}</span>
+          <div className="forecast-main">
+            <span className="forecast-label">Saldo previsto para o fim de {monthLabel(viewMonth).split(' ')[0].toLowerCase()}</span>
+            <strong className="forecast-value"><Money cents={v.forecast.projected} tone="auto" /></strong>
+          </div>
+          <p className="forecast-calc">
+            Conta: <b>{fmtMoney(v.forecast.assets)}</b> em conta hoje + <b>{fmtMoney(v.forecast.receivable)}</b> a receber − <b>{fmtMoney(v.forecast.payable)}</b> a pagar{v.inv.rows.length > 0 ? '. Investimentos não entram' : ''}.
+          </p>
+          <p className="forecast-allow">
+            {v.allowance.perDay > 0
+              ? <>Dá para gastar até <strong>{fmtMoney(v.allowance.perDay)} por dia</strong> {v.allowance.daysLeft === 1 ? 'hoje' : `nos próximos ${v.allowance.daysLeft} dias`} e ainda fechar o mês no positivo, além do que já está previsto.</>
+              : <span className="neg">Sem folga: se tudo o que está previsto acontecer, o mês fecha no zero ou no negativo.</span>}
+          </p>
         </div>
       )}
       <div className="grid-2-1">
@@ -107,6 +118,19 @@ export default function Dashboard() {
         <Card title="Orçamento do mês" actions={<Link href="/orcamento" className="link">Abrir</Link>}>
           {v.buds.length ? v.buds.map((r) => <div className="budget-mini" key={r.budget.id}><div><span>{r.category.name}</span><span className="num">{fmtMoney(r.spent)} / {fmtMoney(r.limit)}</span></div><ProgressBar pct={r.pct} level={r.level} /></div>) : <Empty title="Nenhum orçamento" text="Defina limites por categoria." action={<Link href="/orcamento" className="btn btn-secondary btn-sm">Definir</Link>} />}
         </Card>
+        {isCurrent && (
+          <Card title="Compromissos dos próximos meses" actions={<Link href="/agenda" className="link">Abrir agenda</Link>} flush>
+            {v.commit.some((m) => m.total > 0 || m.income > 0) ? (
+              <table className="table commit-table">
+                <thead><tr><th>Mês</th><th className="num">Contas</th><th className="num">Faturas</th><th className="num">Total a pagar</th><th className="num">A receber</th></tr></thead>
+                <tbody>{v.commit.map((m) => (
+                  <tr key={m.key}><td>{monthLabel(m.key)}</td><td className="num">{m.bills ? fmtMoney(m.bills) : '—'}</td><td className="num">{m.invoices ? fmtMoney(m.invoices) : '—'}</td><td className="num"><strong>{m.total ? fmtMoney(m.total) : '—'}</strong></td><td className="num">{m.income ? fmtMoney(m.income) : '—'}</td></tr>
+                ))}</tbody>
+              </table>
+            ) : <Empty title="Nada comprometido" text="Contas previstas, recorrências e faturas de cartão dos próximos 6 meses aparecem aqui." />}
+            <p className="help card-note">Só o que já está previsto: contas a pagar, recorrências e faturas de cartão. Gastos novos não entram.</p>
+          </Card>
+        )}
         <Card title="Últimas movimentações" actions={<Link href="/lancamentos" className="link">Ver todos</Link>} flush>
           {v.recent.length ? (
             <table className="table"><tbody>{v.recent.map((t) => (

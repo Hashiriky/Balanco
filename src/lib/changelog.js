@@ -6,6 +6,37 @@
 
 export const CHANGELOG = [
   {
+    version: '1.8.1',
+    date: '2026-10-11',
+    title: 'Correção do formulário de lançamento',
+    items: [
+      { type: 'correção', text: 'O rótulo "Descrição" ficava escondido atrás de Despesa/Receita/Transferência quando o formulário ficava mais alto que a janela (por causa das sugestões ou das mensagens de erro em vermelho). O espaçamento foi corrigido em todas as janelas do app: agora, se não couber, a janela rola em vez de amassar os campos.' },
+      { type: 'melhoria', text: 'Os atalhos de preenchimento agora ficam numa faixa de uma linha logo abaixo da Descrição, com altura fixa (o formulário não pula mais). Ao digitar, a faixa mostra só os atalhos parecidos com o que você escreveu, e "Repetir último" aparece quando o campo está vazio.' },
+    ],
+  },
+  {
+    version: '1.8.0',
+    date: '2026-10-11',
+    title: 'Compromissos futuros, contas fixas e alertas',
+    items: [
+      { type: 'novo', text: 'Compromissos dos próximos meses no Painel: mês a mês, quanto já está comprometido em contas a pagar, faturas de cartão e quanto está previsto receber. Compras no cartão entram só pela fatura, sem contar duas vezes.' },
+      { type: 'novo', text: 'Repetir todo mês: no detalhe de um lançamento, o botão "Repetir todo mês" abre o cadastro de recorrência já preenchido, começando no mês seguinte.' },
+      { type: 'novo', text: 'Sugestões de contas fixas na Agenda: o app percebe lançamentos que se repetiram por 3 meses seguidos, com valor e dia parecidos, e oferece criar a recorrência. "Agora não" esconde a sugestão.' },
+      { type: 'novo', text: 'Alerta de gasto fora do normal no Painel: avisa quando uma categoria já passou 50% da média dos últimos 3 meses.' },
+      { type: 'melhoria', text: 'O bloco de saldo previsto no Painel foi reescrito: valor em destaque, conta explicada em uma linha e a folga por dia separada, com textos mais claros e melhor espaçamento.' },
+    ],
+  },
+  {
+    version: '1.7.0',
+    date: '2026-10-10',
+    title: 'Folga do mês e categoria automática',
+    items: [
+      { type: 'novo', text: 'Folga do mês no Painel: abaixo do saldo previsto, o app mostra quanto dá para gastar em média por dia até o fim do mês, ou avisa quando o mês deve fechar sem folga.' },
+      { type: 'novo', text: 'Categoria automática: ao sair do campo Descrição, se a categoria estiver vazia e você já lançou exatamente a mesma descrição antes, o app usa a mesma categoria (e avisa que foi sugestão). Você pode trocar.' },
+      { type: 'melhoria', text: 'Testes novos para a fatura do cartão na virada de mês e de ano, e para os cálculos novos.' },
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-10-10',
     title: 'Novo seletor de período',

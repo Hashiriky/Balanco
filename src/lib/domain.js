@@ -1,7 +1,7 @@
 // Regras financeiras: saldos, agenda (contas a pagar/receber), cartão de crédito, orçamento e relatórios.
 // Funções puras — todo valor em CENTAVOS inteiros. Fáceis de testar.
 import {
-  addDaysISO, dateInMonth, daysInMonth, diffDays, lastDayOfMonth, monthDiff, monthKey, parseISO, shiftMonth, sum, todayISO, isoDate,
+  addDaysISO, dateInMonth, daysInMonth, diffDays, lastDayOfMonth, monthDiff, monthKey, norm, parseISO, shiftMonth, sum, todayISO, isoDate,
 } from './util.js';
 
 export const isCredit = (a) => a.type === 'credit';
@@ -291,6 +291,7 @@ export function buildAlerts({ accounts, txs, recurrences, budgets, categories, t
   });
   const over = budgetRows({ budgets, txs, categories, key }).filter((r) => r.level === 'over');
   if (over.length) out.push({ id: 'budget', tone: 'warn', text: `${over.length} orçamento${over.length > 1 ? 's' : ''} estourado${over.length > 1 ? 's' : ''} este mês`, href: '/orcamento' });
+  unusualSpending({ txs, categories, today }).slice(0, 2).forEach((u) => out.push({ id: `unusual:${u.categoryId}`, tone: 'warn', text: `Gasto com ${u.name} está ${u.pct}% acima da média dos últimos 3 meses`, value: u.amount, href: '/relatorios' }));
   accounts.filter((a) => a.type === 'investment' && !a.archived).forEach((a) => {
     const y = accountYield(a, txs, today);
     if (y.balance <= 0) return;
@@ -318,6 +319,91 @@ export function groupByBank(accounts) {
   const groups = [...map.entries()].map(([bank, items]) => ({ bank, items: [...items].sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name, 'pt-BR')) }));
   const weight = (g) => (g.items.some((a) => a.primary) ? 0 : g.bank ? 1 : 2);
   return groups.sort((x, y) => weight(x) - weight(y) || x.bank.localeCompare(y.bank, 'pt-BR'));
+}
+
+/* ---------- Gasto fora do normal e contas fixas ---------- */
+/** grupos de categoria em que o gasto do mês já passou bem da média dos 3 meses anteriores (base mínima: 2 meses com gasto e média de R$ 100) */
+export function unusualSpending({ txs, categories, today = todayISO() }) {
+  const key = today.slice(0, 7), idx = categoryIndex(categories);
+  const spendOf = (k) => new Map(byCategory(txs.filter((t) => inMonth(t, k)), categories, { type: 'expense', level: 'root', includePending: true }).map((r) => [r.categoryId, r.amount]));
+  const prev = [1, 2, 3].map((n) => spendOf(shiftMonth(key, -n)));
+  const out = [];
+  for (const [id, amount] of spendOf(key)) {
+    const vals = prev.map((m) => m.get(id) || 0), avg = Math.round(sum(vals, (v) => v) / 3);
+    if (vals.filter((v) => v > 0).length < 2 || avg < 10000) continue;
+    if (amount >= avg * 1.5 && amount - avg >= 10000) out.push({ categoryId: id, name: idx.get(id)?.name || 'Sem categoria', amount, avg, pct: Math.round((amount / avg - 1) * 100) });
+  }
+  return out.sort((a, b) => (b.amount - b.avg) - (a.amount - a.avg));
+}
+
+/**
+ * Lançamentos que parecem conta fixa e ainda não têm recorrência: mesma descrição em 3 meses seguidos
+ * (1 por mês), valores parecidos (até 15% de diferença) e mais ou menos no mesmo dia (até 5 dias de diferença).
+ */
+export function detectFixed({ txs, recurrences = [], today = todayISO(), minMonths = 3 }) {
+  const key = today.slice(0, 7), from = shiftMonth(key, -6);
+  const covered = new Set(recurrences.filter((r) => r.active !== false).map((r) => `${r.type}|${baseDescription(r.description)}`));
+  const groups = new Map();
+  for (const t of txs) {
+    const base = baseDescription(t.description), k = `${t.type}|${base}`;
+    if (!base || t.isYield || t.type === 'transfer' || t.recurrenceId || t.installment || !isPaid(t) || t.date > today || t.date.slice(0, 7) < from || covered.has(k)) continue;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  }
+  const out = [];
+  for (const [k, items] of groups) {
+    const months = [...new Set(items.map((t) => t.date.slice(0, 7)))].sort();
+    if (months.length < minMonths || items.length > months.length) continue; // precisa ser um por mês
+    const lastN = months.slice(-minMonths);
+    if (!lastN.every((m, i) => i === 0 || shiftMonth(lastN[i - 1], 1) === m)) continue; // meses seguidos
+    const amounts = items.map((t) => t.amount), days = items.map((t) => Number(t.date.slice(8))).sort((a, b) => a - b);
+    if (Math.max(...amounts) > Math.min(...amounts) * 1.15 || days[days.length - 1] - days[0] > 5) continue;
+    const last = [...items].sort((a, b) => b.date.localeCompare(a.date))[0];
+    out.push({ key: k, type: last.type, description: last.description, amount: last.amount, accountId: last.accountId, categoryId: last.categoryId || '', day: days[Math.floor(days.length / 2)], months: months.length, startMonth: last.date.slice(0, 7) >= key ? shiftMonth(key, 1) : key });
+  }
+  return out.sort((a, b) => b.months - a.months || b.amount - a.amount);
+}
+
+/* ---------- Compromissos dos próximos meses ---------- */
+/**
+ * O que já está comprometido em cada um dos próximos meses (a partir do atual):
+ * contas a pagar (lançamentos previstos + recorrências, fora cartão) e faturas de cartão que vencem no mês.
+ * Compras no cartão entram só pela fatura, para não contar duas vezes. `income` = o que está previsto receber.
+ */
+export function commitments({ accounts, txs, recurrences = [], today = todayISO(), months = 6 }) {
+  const startKey = today.slice(0, 7);
+  const cards = accounts.filter((a) => !a.archived && isCredit(a));
+  const cardIds = new Set(cards.map((c) => c.id));
+  return Array.from({ length: months }, (_, i) => {
+    const key = shiftMonth(startKey, i);
+    const open = agendaOfMonth({ recurrences, txs, key, today }).filter((it) => it.status !== 'paid' && it.type !== 'transfer' && !cardIds.has(it.accountId));
+    const bills = sum(open.filter((it) => it.type === 'expense'), (it) => it.amount);
+    const income = sum(open.filter((it) => it.type === 'income'), (it) => it.amount);
+    let invoices = 0;
+    for (const c of cards) for (const k of [shiftMonth(key, -1), key]) { const inv = cardInvoice(c, txs, k, today); if (inv.dueDate.slice(0, 7) === key) invoices += inv.remaining; }
+    return { key, bills, invoices, income, total: bills + invoices };
+  });
+}
+
+/* ---------- Folga do mês e categoria sugerida ---------- */
+/** quanto dá para gastar por dia até o fim do mês, a partir do saldo previsto (0 se não houver folga) */
+export function dailyAllowance(projected, today = todayISO()) {
+  const daysLeft = Number(lastDayOfMonth(today.slice(0, 7)).slice(8)) - Number(today.slice(8)) + 1;
+  return { daysLeft, projected, perDay: projected > 0 ? Math.floor(projected / daysLeft) : 0 };
+}
+
+const baseDescription = (d) => norm(String(d || '').replace(/ \(\d+\/\d+\)$/, '').trim());
+/** categoria da última vez que você lançou exatamente esta descrição (mesmo tipo); '' se não houver */
+export function guessCategory(txs, categories, type, description) {
+  const key = baseDescription(description);
+  if (!key) return '';
+  const valid = new Set(categories.map((c) => c.id));
+  let best = null;
+  for (const t of txs) {
+    if (t.isYield || t.type !== type || !t.categoryId || !valid.has(t.categoryId) || baseDescription(t.description) !== key) continue;
+    if (!best || String(t.createdAt || t.date) > String(best.createdAt || best.date)) best = t;
+  }
+  return best ? best.categoryId : '';
 }
 
 export { addDaysISO, isoDate, monthKey };

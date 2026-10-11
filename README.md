@@ -6,9 +6,35 @@ Finanças pessoais em Next.js 15 + React 19 + Firebase. Este documento reúne o 
 
 ---
 
+## 0. Plano de ação — siga esta ordem
+
+**Regras para não nos perdermos**
+1. **Uma versão por vez.** Cada versão termina com: testes passando, item no **Novidades** (changelog), README atualizado e um ZIP novo.
+2. **Portão de teste.** Só começamos a versão seguinte depois que você testou a anterior (roteiro em [`docs/ROTEIRO-DE-TESTES.md`](docs/ROTEIRO-DE-TESTES.md)) e me disse "ok" ou quais problemas apareceram.
+3. **Se algo quebrar**, me mande o que estava fazendo e a mensagem de erro (no navegador: tecla F12, aba *Console*; ou o texto que aparecer no terminal).
+4. As fases da seção 3 são o **estoque** de ideias. Esta seção 0 é a **ordem** em que elas são feitas.
+
+| Versão | Tema | O que entra | Está pronto quando |
+| --- | --- | --- | --- |
+| **1.7.0** *(feita)* | Folga e categoria automática | Folga do mês no Painel · categoria automática pela descrição · `npm run check` · testes da fatura na virada de ano | — |
+| **1.8.0** *(feita)* | Funções novas | Compromissos dos próximos meses · "Repetir todo mês" · sugestões de contas fixas · alerta de gasto fora do normal · textos do saldo previsto reescritos | Roteiro de testes (seção 1.8) todo marcado |
+| **1.9.0** | Arrumação do código | Dividir o `Dialogs.jsx` (um arquivo por janela) · organizar o `globals.css` em seções · ESLint (exige `npm install`) · testes do armazenamento e da restauração de backup. **Nada muda na tela.** | `npm run check` passa e o roteiro continua todo ok |
+| **2.0.0** | Segurança dos dados | Resumo "vai apagar X e gravar Y" antes de restaurar/sincronizar · verificação de e-mail e senha mais forte · regras do Firestore com validação dos campos | Restaurar backup mostra o resumo; gravar lançamentos continua funcionando depois de publicar as regras (testar no *Rules Playground* do Firebase) |
+| **2.1.0** | Metas de poupança | Meta com nome, valor, prazo e conta ligada · progresso no Painel · entra no backup e na nuvem · testes | Criar, editar, concluir e excluir meta; progresso bate com o saldo da conta |
+| **2.2.0** | Conciliação | Marcar lançamentos como "conferidos" · informar o saldo real do banco e ver a diferença · filtro "não conferidos" | A diferença mostrada bate com a conta feita à mão |
+| **2.3.0** | Acessibilidade | Gráficos acessíveis por teclado (tabela com os mesmos valores) | Dá para ler todos os valores sem mouse |
+
+**Pequenos extras** que podem entrar em qualquer versão, sem mudar a ordem: usar o seletor de período também na Agenda e no Importar.
+
+**Fora do plano** (só se você pedir): etiquetas/centros de custo, anexos de comprovantes, lembretes por e-mail e compartilhar com a família. São grandes e pedem servidor ou armazenamento extra.
+
+**Onde estamos agora:** versão 1.8.0 pronta. Próximo passo: você roda o roteiro de testes (`docs/ROTEIRO-DE-TESTES.md`, seções 1.7 e 1.8) e seguimos para a 1.9.0.
+
+---
+
 ## 1. Estado atual
 
-> **Versão 1.6.0** (10/10/2026): novo seletor de período em Lançamentos e Relatórios (atalhos + calendário de intervalo). A 1.5.0 trouxe: orçamento com sobra acumulada, cor por conta e documentação atualizada. O Balanço é **só web** (sem app/PWA). A 1.4.0 trouxe: busca global (`/`), PDF dos relatórios, cópia de segurança automática antes de apagar/substituir dados e rolagem travada atrás das janelas. A 1.3.0 trouxe: formulários não fecham mais ao clicar fora (Esc pergunta antes de descartar) e atalhos "Mais usados" no lançamento. A 1.2.0 trouxe: "Salvar e novo", "Repetir último lançamento", atalhos `N` e `/`, comparação com o mês anterior no Painel e contraste dos títulos de banco. A 1.1.0 trouxe conta Principal, campo Banco, Contas agrupadas por banco e a tela **Novidades** (changelog). O que mudou em cada versão está no menu, em *Novidades*, e no arquivo `src/lib/changelog.js`. **Para registrar uma mudança nova, é só acrescentar uma entrada no topo desse arquivo.**
+> **Versão 1.8.1** (11/10/2026): correção do formulário de lançamento (rótulo escondido) e nova faixa de atalhos abaixo da Descrição. A 1.8.0 trouxe: compromissos dos próximos meses, "Repetir todo mês", sugestões de contas fixas, alerta de gasto fora do normal e textos do saldo previsto reescritos. A 1.7.0 trouxe folga do mês e categoria automática. A 1.6.0 trouxe: novo seletor de período em Lançamentos e Relatórios (atalhos + calendário de intervalo). A 1.5.0 trouxe: orçamento com sobra acumulada, cor por conta e documentação atualizada. O Balanço é **só web** (sem app/PWA). A 1.4.0 trouxe: busca global (`/`), PDF dos relatórios, cópia de segurança automática antes de apagar/substituir dados e rolagem travada atrás das janelas. A 1.3.0 trouxe: formulários não fecham mais ao clicar fora (Esc pergunta antes de descartar) e atalhos "Mais usados" no lançamento. A 1.2.0 trouxe: "Salvar e novo", "Repetir último lançamento", atalhos `N` e `/`, comparação com o mês anterior no Painel e contraste dos títulos de banco. A 1.1.0 trouxe conta Principal, campo Banco, Contas agrupadas por banco e a tela **Novidades** (changelog). O que mudou em cada versão está no menu, em *Novidades*, e no arquivo `src/lib/changelog.js`. **Para registrar uma mudança nova, é só acrescentar uma entrada no topo desse arquivo.**
 
 O app está mais completo do que o planejamento sugere. Já existem:
 
@@ -87,10 +113,7 @@ Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** gra
 
 ## 4. Sugestão de ordem
 
-1. **Fase 1** primeiro: protege seus dados.
-2. **Fase 2** em seguida: ganhos rápidos que você sente todo dia.
-3. **Fase 3** na ordem **metas → PDF → conciliação**, o que dá mais valor com menos esforço.
-4. **Fases 4, 5 e 6** em paralelo, conforme o tempo.
+A ordem oficial está na **seção 0** (plano por versão).
 
 ## 5. Ideias suas
 
@@ -112,6 +135,15 @@ Legenda de esforço: **P** pequeno (até 1 sessão) · **M** médio · **G** gra
 **Detalhes a decidir:**
 - Cartão de crédito pode ser "Principal"? Sugestão: não, a principal é sempre conta corrente, dinheiro ou poupança.
 - O que acontece ao arquivar a conta principal? Sugestão: perguntar qual passa a ser a principal.
+
+### Funções novas pensadas pelo Claude (ainda não feitas)
+
+- [x] **Folga do mês** no Painel (quanto dá para gastar por dia). *Feito na 1.7.0.*
+- [x] **Categoria automática** pela descrição já usada antes. *Feito na 1.7.0.*
+- [x] **(M) Compromissos futuros:** quanto já está comprometido nos próximos meses (parcelas do cartão + recorrências + faturas), em uma visão só. *Feito na 1.8.0.*
+- [x] **(P) "Repetir todo mês":** botão no detalhe de um lançamento que abre o cadastro de recorrência já preenchido. *Feito na 1.8.0.*
+- [x] **(M) Detectar contas fixas:** o app percebe que uma descrição se repete todo mês e sugere criar a recorrência. *Feito na 1.8.0.*
+- [x] **(M) Alerta de gasto fora do normal:** aviso quando uma categoria passa muito da média dos últimos meses. *Feito na 1.8.0.*
 
 ### Outras ideias
 

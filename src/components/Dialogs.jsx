@@ -5,11 +5,11 @@ import { AccountName, CategoryLabel, StatusTag, TxAmount, useLookups } from '@/c
 import { AccountSelect, CategorySelect, WEEKDAY_OPTIONS } from '@/components/selects.jsx';
 import { Choice, Field, Icon, Modal, Money, MoneyInput, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_COLORS, ACCOUNT_TYPES, FREQUENCIES } from '@/lib/defaults.js';
-import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, bankOf, canBePrimary, categoryPath, defaultAccountId, invoiceMonthOf, primaryAccount } from '@/lib/domain.js';
+import { accountBalance, accountYield, accountYieldHistory, accountYieldRate, bankOf, canBePrimary, categoryPath, defaultAccountId, guessCategory, invoiceMonthOf, primaryAccount } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
-import { addMonthsISO, centsToField, cn, fmtDate, fmtMoney, isValidISO, monthKey, monthLabel, norm, parseMoney, splitCents, todayISO, uid } from '@/lib/util.js';
+import { addMonthsISO, centsToField, cn, fmtDate, fmtMoney, isValidISO, monthKey, monthLabel, norm, parseMoney, shiftMonth, splitCents, todayISO, uid } from '@/lib/util.js';
 
 const hasErrors = (e) => Object.keys(e).length > 0;
 
@@ -105,6 +105,10 @@ export function TxViewDialog({ tx, onClose }) {
     <Modal title="Detalhes do lançamento" size="sm" onClose={onClose}
       footer={(close) => (<>
         <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Fechar</button>
+        {!isTransfer && !tx.isYield && !tx.installment && !tx.recurrenceId && (
+          <button type="button" className="btn btn-secondary" title="Cria uma conta fixa com os dados deste lançamento, a partir do mês seguinte"
+            onClick={() => { close(); setTimeout(() => ui.open('recurrence', { preset: { type: tx.type, description: tx.description, amount: tx.amount, accountId: tx.accountId, categoryId: tx.categoryId, day: Number(tx.date.slice(8)), startMonth: shiftMonth(tx.date.slice(0, 7), 1) } }), 0); }}>Repetir todo mês</button>
+        )}
         <button type="button" className="btn btn-primary" onClick={() => { close(); setTimeout(() => ui.open('tx', { tx }), 0); }}><Icon name="edit" size={16} />Editar</button>
       </>)}>
       <div className="view-amount"><TxAmount t={tx} /></div>
@@ -368,7 +372,7 @@ export function TxDialog({ tx, preset = {}, onClose }) {
     setViewMonth(date.slice(0, 7));
     toast(editing ? 'Lançamento atualizado.' : parcels > 1 && type === 'expense' ? `${parcels} parcelas lançadas.` : 'Lançamento salvo.');
     if (again) { // "Salvar e novo": limpa o que muda de um lançamento pro outro e mantém tipo, conta, data e situação
-      setDescription(''); setAmount(''); setCategoryId(''); setNotes(''); setParcels(1); setErrors({});
+      setDescription(''); setAmount(''); setCategoryId(''); setAutoCat(false); setNotes(''); setParcels(1); setErrors({});
       setTimeout(() => document.getElementById('tx-description')?.focus(), 0);
     } else close();
   };
@@ -393,12 +397,21 @@ export function TxDialog({ tx, preset = {}, onClose }) {
       if (String(t.createdAt || t.date) > String(cur.last.createdAt || cur.last.date)) cur.last = t;
       map.set(k, cur);
     }
-    return [...map.values()].filter((e) => e.n >= 2).sort((a, b) => b.n - a.n || a.desc.localeCompare(b.desc, 'pt-BR')).slice(0, 6);
+    return [...map.values()].filter((e) => e.n >= 2).sort((a, b) => b.n - a.n || a.desc.localeCompare(b.desc, 'pt-BR')).slice(0, 40);
   }, [editing, type, data.transactions]);
+  /* categoria sugerida: ao sair do campo Descrição, se a categoria está vazia e já houve um lançamento igual, usa a mesma */
+  const [autoCat, setAutoCat] = useState(false);
+  const guessFromDescription = () => {
+    if (editing || type === 'transfer' || categoryId) return;
+    const g = guessCategory(data.transactions, data.categories, type, description);
+    if (g) { setCategoryId(g); setAutoCat(true); }
+  };
   const fillFrequent = (e) => {
     setDescription(e.desc); setAmount(centsToField(e.last.amount)); setCategoryId(e.last.categoryId || ''); setErrors({});
     if (data.accounts.some((a) => a.id === e.last.accountId && !a.archived)) setAccountId(e.last.accountId);
   };
+  const typed = norm(description);
+  const shownFrequent = (typed ? frequent.filter((e) => norm(e.desc).includes(typed) && norm(e.desc) !== typed) : frequent).slice(0, 6);
   const del = async (close) => {
     const sib = tx.installment ? data.transactions.filter((x) => x.installment?.group === tx.installment.group) : [];
     const res = await ui.confirm({ title: 'Excluir lançamento', danger: true, okLabel: sib.length > 1 ? 'Só esta parcela' : 'Excluir', extraLabel: sib.length > 1 ? `Todas as ${sib.length} parcelas` : '',
@@ -415,14 +428,18 @@ export function TxDialog({ tx, preset = {}, onClose }) {
         {editing && <button type="button" className="btn btn-secondary" onClick={() => { close(); setTimeout(() => ui.open('tx', { preset: { ...tx, id: undefined, date: todayISO(), installment: undefined, recurrenceId: undefined, recurrenceDate: undefined, externalId: undefined } }), 0); }}>Duplicar</button>}
         <span className="grow" /><button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button>{!editing && <button type="button" className="btn btn-secondary" onClick={() => save(close, true)}>Salvar e novo</button>}<button type="submit" className="btn btn-primary">Salvar</button>
       </>)}>
-      {!editing && !description.trim() && !(cents > 0) && (last || frequent.length > 0) && (
-        <div className="quick-row" aria-label="Atalhos de preenchimento">
-          {last && <button type="button" className="btn btn-secondary btn-sm" onClick={repeatLast} title={`${last.description} · ${fmtMoney(last.amount)}`}>Repetir último</button>}
-          {frequent.map((e) => <button key={e.desc} type="button" className="btn btn-ghost btn-sm quick-chip" onClick={() => fillFrequent(e)} title={`${e.desc} · ${fmtMoney(e.last.amount)} · usado ${e.n}×`}>{e.desc}</button>)}
-        </div>
-      )}
       <Choice name="txType" value={type} onChange={changeType} options={[{ value: 'expense', label: 'Despesa' }, { value: 'income', label: 'Receita' }, { value: 'transfer', label: 'Transferência' }]} />
-      <Field label="Descrição" error={errors.description}><input className="input" value={description} maxLength={80} onChange={(e) => setDescription(e.target.value)} id="tx-description" data-autofocus placeholder={type === 'transfer' ? 'Opcional' : 'Ex.: Supermercado, Salário…'} aria-label="Descrição" /></Field>
+      <div className="desc-block">
+        <Field label="Descrição" error={errors.description}><input className="input" value={description} maxLength={80} onChange={(e) => setDescription(e.target.value)} onBlur={guessFromDescription} id="tx-description" data-autofocus placeholder={type === 'transfer' ? 'Opcional' : 'Ex.: Supermercado, Salário…'} aria-label="Descrição" /></Field>
+        {!editing && (last || frequent.length > 0) && (
+          <div className="suggest-strip" role="group" aria-label="Atalhos de preenchimento">
+            <span className="strip-label">Atalhos</span>
+            {!typed && last && <button type="button" className="chip chip-main" onClick={repeatLast} title={`${last.description} · ${fmtMoney(last.amount)}`}>Repetir último</button>}
+            {shownFrequent.map((e) => <button key={e.desc} type="button" className="chip" onClick={() => fillFrequent(e)} title={`${e.desc} · ${fmtMoney(e.last.amount)} · usado ${e.n}×`}>{e.desc}</button>)}
+            {typed && !shownFrequent.length && <span className="muted strip-empty">Nenhum atalho parecido com o que você digitou.</span>}
+          </div>
+        )}
+      </div>
       <div className="grid-2">
         <Field label="Valor" error={errors.amount}><MoneyInput value={amount} onChange={setAmount} aria-label="Valor" /></Field>
         <Field label="Data" error={errors.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data" /></Field>
@@ -431,7 +448,7 @@ export function TxDialog({ tx, preset = {}, onClose }) {
         <Field label={type === 'transfer' ? 'Conta de origem' : 'Conta'} error={errors.accountId}><AccountSelect value={accountId} onChange={setAccountId} investments={type === 'transfer'} aria-label="Conta" /></Field>
         {type === 'transfer'
           ? <Field label="Conta de destino" error={errors.toAccountId}><AccountSelect value={toAccountId} onChange={setToAccountId} exclude={[accountId]} investments aria-label="Conta de destino" /></Field>
-          : <Field label="Categoria" error={errors.categoryId}><CategorySelect type={type} value={categoryId} onChange={setCategoryId} aria-label="Categoria" /></Field>}
+          : <Field label="Categoria" error={errors.categoryId} help={autoCat && categoryId ? 'Sugerida pelo seu histórico. Troque se quiser.' : undefined}><CategorySelect type={type} value={categoryId} onChange={(v) => { setCategoryId(v); setAutoCat(false); }} aria-label="Categoria" /></Field>}
       </div>
       {onCard && type === 'expense' && isValidISO(date) && <p className="help">Esta compra entra na fatura de {monthLabel(invoiceMonthOf(date, account.closingDay || 1))}.</p>}
       <label className="check"><input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} /><span>{type === 'income' ? 'Já recebido' : type === 'transfer' ? 'Já realizada' : 'Já pago'}</span><small className="muted">Desmarque para lançar como previsto (aparece na Agenda).</small></label>
@@ -572,20 +589,21 @@ export function PayInvoiceDialog({ card, invoice, onClose }) {
 }
 
 /* ---------- Recorrência ---------- */
-export function RecurrenceDialog({ recurrence, onClose }) {
+export function RecurrenceDialog({ recurrence, preset, onClose }) {
   const { data, upsert, remove } = useStore();
   const ui = useUI();
   const editing = !!recurrence;
-  const [type, setType] = useState(recurrence?.type || 'expense');
-  const [description, setDescription] = useState(recurrence?.description || '');
-  const [amount, setAmount] = useState(centsToField(recurrence?.amount));
-  const [accountId, setAccountId] = useState(recurrence?.accountId || data.accounts.find((a) => !a.archived && a.type !== 'credit')?.id || '');
-  const [categoryId, setCategoryId] = useState(recurrence?.categoryId || '');
-  const [freq, setFreq] = useState(recurrence?.freq || 'monthly');
-  const [day, setDay] = useState(String(recurrence?.day ?? new Date().getDate()));
-  const [start, setStart] = useState(recurrence?.startMonth || monthKey(new Date()));
-  const [end, setEnd] = useState(recurrence?.endMonth || '');
-  const [active, setActive] = useState(recurrence?.active !== false);
+  const base = recurrence || preset; // preset: dados sugeridos para uma recorrência nova (ex.: vindo de "Repetir todo mês")
+  const [type, setType] = useState(base?.type || 'expense');
+  const [description, setDescription] = useState(base?.description || '');
+  const [amount, setAmount] = useState(centsToField(base?.amount));
+  const [accountId, setAccountId] = useState(base?.accountId || data.accounts.find((a) => !a.archived && a.type !== 'credit')?.id || '');
+  const [categoryId, setCategoryId] = useState(base?.categoryId || '');
+  const [freq, setFreq] = useState(base?.freq || 'monthly');
+  const [day, setDay] = useState(String(base?.day ?? new Date().getDate()));
+  const [start, setStart] = useState(base?.startMonth || monthKey(new Date()));
+  const [end, setEnd] = useState(base?.endMonth || '');
+  const [active, setActive] = useState(base?.active !== false);
   const [errors, setErrors] = useState({});
   return (
     <Modal title={editing ? 'Editar recorrência' : 'Nova recorrência'} onClose={onClose}

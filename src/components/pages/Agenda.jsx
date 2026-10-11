@@ -1,15 +1,17 @@
 'use client';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AccountName, CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
 import { Card, Empty, Kpi, Money, PageHeader, Tag } from '@/components/ui.jsx';
 import { FREQUENCIES } from '@/lib/defaults.js';
-import { agendaOfMonth, agendaSummary } from '@/lib/domain.js';
+import { agendaOfMonth, agendaSummary, detectFixed } from '@/lib/domain.js';
 import { usePrefs } from '@/lib/prefs.js';
 import { useStore } from '@/lib/store.jsx';
 import { toast } from '@/lib/toast.js';
 import { useUI } from '@/lib/ui-context.jsx';
-import { cn, fmtDate, monthLabel, todayISO } from '@/lib/util.js';
+import { cn, fmtDate, fmtMoney, monthLabel, todayISO } from '@/lib/util.js';
 import { WEEKDAY_OPTIONS } from '@/components/selects.jsx';
+
+const IGNORED_KEY = 'balanco.fixedIgnored'; // sugestões de conta fixa que você dispensou (só neste navegador)
 
 export default function Agenda() {
   const { data, viewMonth, upsert, remove } = useStore();
@@ -19,6 +21,10 @@ export default function Agenda() {
   const today = todayISO();
   const items = useMemo(() => agendaOfMonth({ recurrences: data.recurrences, txs: data.transactions, key: viewMonth, today }), [data.recurrences, data.transactions, viewMonth, today]);
   const s = agendaSummary(items);
+  const [ignored, setIgnored] = useState([]);
+  useEffect(() => { try { setIgnored(JSON.parse(localStorage.getItem(IGNORED_KEY) || '[]')); } catch { /* ignore */ } }, []);
+  const ignore = (k) => { const next = [...ignored, k]; setIgnored(next); try { localStorage.setItem(IGNORED_KEY, JSON.stringify(next)); } catch { /* ignore */ } };
+  const suggestions = useMemo(() => detectFixed({ txs: data.transactions, recurrences: data.recurrences, today }).filter((x) => !ignored.includes(x.key)).slice(0, 4), [data.transactions, data.recurrences, today, ignored]);
   const undo = (i) => {
     if (i.tx.recurrenceId) { const removed = remove('transactions', [i.tx]); toast('Pagamento desfeito.', { action: { label: 'Refazer', run: () => upsert('transactions', removed) } }); }
     else { upsert('transactions', { ...i.tx, status: 'pending' }); toast('Lançamento voltou a ser previsto.'); }
@@ -52,6 +58,20 @@ export default function Agenda() {
           </table></div>
         ) : <Empty title="Nenhum vencimento neste mês" text="Cadastre recorrências (aluguel, internet, salário) ou lance itens como previstos." action={<button type="button" className="btn btn-primary" onClick={() => ui.open('recurrence')}>Nova recorrência</button>} />}
       </Card>
+      {suggestions.length > 0 && (
+        <Card title="Sugestões de contas fixas">
+          <p className="help">Estes lançamentos se repetiram nos últimos meses, com valor parecido e mais ou menos no mesmo dia. Quer que a Agenda avise todo mês?</p>
+          <ul className="suggest-list">
+            {suggestions.map((x) => (
+              <li key={x.key}>
+                <span className="grow"><strong>{x.description}</strong><small className="muted"> · {fmtMoney(x.amount)} · por volta do dia {x.day} · {x.months} meses seguidos</small></span>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => ui.open('recurrence', { preset: { type: x.type, description: x.description, amount: x.amount, accountId: x.accountId, categoryId: x.categoryId, day: x.day, startMonth: x.startMonth } })}>Criar recorrência</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => ignore(x.key)}>Agora não</button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <Card title="Recorrências cadastradas" flush>
         {data.recurrences.length ? (
           <div className="table-wrap"><table className="table">
