@@ -6,6 +6,26 @@
 
 export const CHANGELOG = [
   {
+    version: '1.8.3',
+    date: '2026-10-12',
+    title: 'Do aviso direto para a fatura',
+    items: [
+      { type: 'novo', text: 'O botão "Ver" do aviso de fatura agora leva direto ao cartão na tela Contas: abre a fatura certa (mesmo que seja de outro mês), rola até o cartão e o destaca com um anel azul por alguns segundos.' },
+      { type: 'novo', text: 'Na tela Contas, o cartão com fatura atrasada, vencendo hoje ou em até 7 dias ganha contorno vermelho (ou laranja) e uma faixa no topo do painel com o valor, o botão "Pagar fatura" e, se a fatura estiver em outro mês, "Ver esta fatura".' },
+      { type: 'novo', text: 'Na Agenda, as contas que vencem hoje ficam em destaque vermelho, e o "Ver" do aviso "conta vence HOJE" rola até a primeira delas.' },
+    ],
+  },
+  {
+    version: '1.8.2',
+    date: '2026-10-12',
+    title: 'Avisos de vencimento mais fortes',
+    items: [
+      { type: 'novo', text: 'Faixa vermelha no topo de todas as telas quando uma fatura ou conta vence hoje, ou está atrasada. Ela traz o valor e o botão Ver. "Dispensar por hoje" esconde a faixa até amanhã (ou até surgir outro aviso urgente).' },
+      { type: 'novo', text: 'Aviso de contas a pagar que vencem hoje (no cartão, só a fatura conta).' },
+      { type: 'melhoria', text: 'Avisos de fatura por urgência: atrasada e "vence HOJE: último dia para pagar sem juros" ficam na faixa vermelha; "vence amanhã" fica vermelho no Painel; de 2 a 7 dias fica amarelo, com "vence em N dias". Antes todos tinham o mesmo visual e só mostravam a data.' },
+    ],
+  },
+  {
     version: '1.8.1',
     date: '2026-10-11',
     title: 'Correção do formulário de lançamento',

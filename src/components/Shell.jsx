@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import AuthScreen from '@/components/Auth.jsx';
 import { AccountDialog, AccountViewDialog, BudgetDialog, CategoryDialog, CategoryPickerDialog, ConfirmDialog, PayInvoiceDialog, RecurrenceDialog, RuleDialog, SearchDialog, SettleDialog, TxDialog, TxViewDialog, YieldBatchDialog, YieldUpdateDialog } from '@/components/Dialogs.jsx';
 import Nav from '@/components/Nav.jsx';
+import UrgentBanner from '@/components/UrgentBanner.jsx';
 import { ToastHost } from '@/components/ui.jsx';
 import { StoreProvider, useStore } from '@/lib/store.jsx';
 import { UIProvider, useUI } from '@/lib/ui-context.jsx';
@@ -37,7 +38,7 @@ function Inner({ children }) {
       <div className="content-area">
         <main className="main" id="main" key={path}>
           {status === 'loading' && <p className="loading">Carregando…</p>}
-          {ready && <div className="container">{children}</div>}
+          {ready && <div className="container"><UrgentBanner />{children}</div>}
         </main>
       </div>
       {(status === 'signedOut' || authOpen) && <AuthScreen />}

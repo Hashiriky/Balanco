@@ -1,13 +1,13 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CategoryLabel, useLookups } from '@/components/pages/shared.jsx';
 import { Card, Empty, Icon, Kpi, Money, PageHeader, ProgressBar, Tag } from '@/components/ui.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
-import { accountsOverview, cardAvailable, cardInvoice, cardOpeningDebt, cardUsed, groupByBank, isCredit, openingInvoiceKey } from '@/lib/domain.js';
+import { accountsOverview, cardAvailable, cardInvoice, cardOpeningDebt, cardUsed, groupByBank, invoiceUrgency, isCredit, openingInvoiceKey } from '@/lib/domain.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
-import { fmtDate, fmtMoney, monthLabel, shiftMonth, todayISO } from '@/lib/util.js';
+import { cn, fmtDate, fmtMoney, monthLabel, shiftMonth, todayISO } from '@/lib/util.js';
 
 const INV_STATUS = { open: ['Aberta', undefined], closed: ['Fechada', 'warn'], late: ['Vencida', 'danger'], paid: ['Paga', 'ok'], empty: ['Sem compras', undefined] };
 
@@ -22,8 +22,42 @@ function CardPanel({ card }) {
   const inv = useMemo(() => cardInvoice(card, data.transactions, key, today), [card, data.transactions, key, today]);
   const used = cardUsed(card, data.transactions), avail = cardAvailable(card, data.transactions);
   const [label, tone] = INV_STATUS[inv.status];
+  /* fatura que merece atenção (atrasada, vence hoje ou em até 7 dias): destaca o cartão e avisa dentro do painel */
+  const urg = useMemo(() => invoiceUrgency(card, data.transactions, today), [card, data.transactions, today]);
+  const urgMonth = urg ? monthLabel(urg.key).split(' ')[0].toLowerCase() : '';
+  const urgText = !urg ? '' : urg.level === 'late' ? `Fatura de ${urgMonth} venceu em ${fmtDate(urg.invoice.dueDate)}: pague o quanto antes, pode estar gerando juros`
+    : urg.level === 'today' ? `Fatura de ${urgMonth} vence HOJE: último dia para pagar sem juros`
+    : urg.days === 1 ? `Fatura de ${urgMonth} vence amanhã (${fmtDate(urg.invoice.dueDate)})` : `Fatura de ${urgMonth} vence em ${urg.days} dias (${fmtDate(urg.invoice.dueDate)})`;
+  /* vindo do botão "Ver" de um aviso (#fatura-<cartão>-<AAAA-MM>): abre a fatura do aviso, rola até o cartão e o destaca por alguns segundos */
+  const anchor = useRef(null);
+  const [focus, setFocus] = useState(false);
+  useEffect(() => {
+    let t1, t2;
+    const go = () => {
+      const m = window.location.hash.match(/^#fatura-(.+)-(\d{4}-\d{2})$/);
+      if (!m || m[1] !== card.id) return;
+      setKey(m[2]);
+      t1 = setTimeout(() => {
+        const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        anchor.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+        setFocus(true); t2 = setTimeout(() => setFocus(false), 4500);
+      }, 120);
+    };
+    go();
+    window.addEventListener('hashchange', go);
+    return () => { window.removeEventListener('hashchange', go); clearTimeout(t1); clearTimeout(t2); };
+  }, [card.id]);
   return (
+    <div ref={anchor} id={`fatura-${card.id}`} className={cn('card-anchor', urg && `card-urgent-${urg.level === 'soon' ? 'warn' : 'danger'}`, focus && 'card-focus')}>
     <Card title={`Cartão ${card.name}`} className="card-panel" actions={<><button type="button" className="btn btn-secondary btn-sm" onClick={() => setKey(shiftMonth(key, -1))} aria-label="Fatura anterior">‹</button><strong className="inv-month">{monthLabel(key)}</strong><button type="button" className="btn btn-secondary btn-sm" onClick={() => setKey(shiftMonth(key, 1))} aria-label="Próxima fatura">›</button></>}>
+      {urg && (
+        <div className={cn('inv-urgent', urg.level === 'soon' ? 'inv-urgent-warn' : 'inv-urgent-danger')} role="status">
+          <Icon name="alert" size={20} />
+          <span><strong>{urgText}</strong> · {fmtMoney(urg.invoice.remaining)}</span>
+          {urg.key !== key && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setKey(urg.key)}>Ver esta fatura</button>}
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => ui.open('payInvoice', { card, invoice: urg.invoice })}>Pagar fatura</button>
+        </div>
+      )}
       <div className="kpis kpis-3">
         <Kpi label="Limite" value={fmtMoney(card.limit)} sub={`Disponível: ${fmtMoney(avail)}`} />
         <Kpi label="Limite usado" value={fmtMoney(used)} sub={<ProgressBar pct={card.limit ? (used / card.limit) * 100 : 0} level={used > card.limit ? 'over' : used / (card.limit || 1) > 0.85 ? 'high' : 'ok'} />} />
@@ -40,6 +74,7 @@ function CardPanel({ card }) {
       ) : <Empty title="Sem compras nesta fatura" />}
       {inv.payments.length > 0 && <p className="muted">Pagamentos: {inv.payments.map((p) => `${fmtDate(p.date)} — ${fmtMoney(p.amount)}`).join(' · ')}</p>}
     </Card>
+    </div>
   );
 }
 

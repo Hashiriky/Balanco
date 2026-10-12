@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAlerts, cardInvoice, commitments, dailyAllowance, detectFixed, guessCategory, invoiceDates, invoiceMonthOf, unusualSpending } from '../src/lib/domain.js';
+import { buildAlerts, cardInvoice, commitments, dailyAllowance, detectFixed, guessCategory, invoiceDates, invoiceMonthOf, invoiceUrgency, unusualSpending } from '../src/lib/domain.js';
 
 test('folga do mês: saldo previsto dividido pelos dias que faltam (hoje conta)', () => {
   assert.deepEqual(dailyAllowance(230000, '2026-10-09'), { daysLeft: 23, projected: 230000, perDay: 10000 });
@@ -131,4 +131,56 @@ test('contas fixas: não sugere quando não parece fixa', () => {
   assert.equal(d(academia, [{ id: 'r', type: 'expense', description: 'academia', active: true }]), 0); // já tem recorrência
   assert.equal(d(academia.map((t) => ({ ...t, installment: { number: 1, total: 3 } }))), 0); // parcelas não contam
   assert.equal(d(academia.map((t) => ({ ...t, type: 'transfer' }))), 0);
+});
+
+/* Avisos de fatura por urgência (fatura de outubro vence dia 12) */
+const cartaoInter = { id: 'k', name: 'Inter PF Crédito', type: 'credit', initialBalance: 0, limit: 500000, closingDay: 2, dueDay: 12 };
+const compraSet = { id: 'cs', accountId: 'k', type: 'expense', description: 'Compra', amount: 9343, date: '2026-09-20', status: 'paid' };
+const alertaFatura = (today, txs = [compraSet]) => buildAlerts({ accounts: [bank, cartaoInter], txs, recurrences: [], budgets: [], categories: [], today }).find((a) => a.id === 'inv:k:2026-10');
+
+test('fatura que vence hoje é alerta urgente e vermelho', () => {
+  const a = alertaFatura('2026-10-12');
+  assert.equal(a.tone, 'danger'); assert.equal(a.urgent, true); assert.equal(a.value, 9343);
+  assert.match(a.text, /vence HOJE.*sem juros/);
+});
+
+test('fatura atrasada é urgente; amanhã é vermelha; depois fica amarela', () => {
+  const atrasada = alertaFatura('2026-10-13');
+  assert.deepEqual([atrasada.tone, atrasada.urgent], ['danger', true]); assert.match(atrasada.text, /venceu em 12\/10\/2026.*juros/);
+  const amanha = alertaFatura('2026-10-11');
+  assert.deepEqual([amanha.tone, !!amanha.urgent], ['danger', false]); assert.match(amanha.text, /vence amanhã \(12\/10\)/);
+  const emTres = alertaFatura('2026-10-09');
+  assert.deepEqual([emTres.tone, !!emTres.urgent], ['warn', false]); assert.match(emTres.text, /vence em 3 dias \(12\/10\)/);
+});
+
+test('fatura paga não gera aviso de vencimento', () => {
+  const pagamento = { id: 'p', type: 'transfer', accountId: 'b', toAccountId: 'k', amount: 9343, date: '2026-10-10', status: 'paid', invoiceMonth: '2026-10' };
+  assert.equal(alertaFatura('2026-10-12', [compraSet, pagamento]), undefined);
+});
+
+test('conta a pagar com vencimento hoje gera alerta urgente (cartão fica de fora)', () => {
+  const luz = { id: 'l', type: 'expense', description: 'Luz', amount: 15000, accountId: 'b', date: '2026-10-12', status: 'pending' };
+  const parcelaCartao = { id: 'pc', type: 'expense', description: 'Parcela', amount: 5000, accountId: 'k', date: '2026-10-12', status: 'pending' };
+  const al = buildAlerts({ accounts: [bank, cartaoInter], txs: [luz, parcelaCartao], recurrences: [], budgets: [], categories: [], today: '2026-10-12' });
+  const d = al.find((a) => a.id === 'due-today');
+  assert.ok(d); assert.equal(d.urgent, true); assert.equal(d.value, 15000); assert.match(d.text, /1 conta vence HOJE/);
+  assert.equal(buildAlerts({ accounts: [bank], txs: [luz], recurrences: [], budgets: [], categories: [], today: '2026-10-11' }).some((a) => a.id === 'due-today'), false);
+});
+
+test('alerta de fatura leva direto para a fatura do cartão', () => {
+  assert.equal(alertaFatura('2026-10-12').href, '/contas#fatura-k-2026-10');
+});
+
+test('fatura mais urgente do cartão: atrasada > vence hoje > vence em até 7 dias', () => {
+  const u = (today, txs = [compraSet]) => invoiceUrgency(cartaoInter, txs, today);
+  assert.deepEqual([u('2026-10-12').level, u('2026-10-12').key, u('2026-10-12').days], ['today', '2026-10', 0]);
+  assert.deepEqual([u('2026-10-13').level, u('2026-10-13').key], ['late', '2026-10']);
+  assert.deepEqual([u('2026-10-09').level, u('2026-10-09').days], ['soon', 3]);
+  assert.equal(u('2026-10-01'), null); // vence daqui a 11 dias: sem urgência
+  assert.equal(invoiceUrgency(cartaoInter, [], '2026-10-12'), null); // sem compras
+  const pagamento = { id: 'p', type: 'transfer', accountId: 'b', toAccountId: 'k', amount: 9343, date: '2026-10-10', status: 'paid', invoiceMonth: '2026-10' };
+  assert.equal(u('2026-10-12', [compraSet, pagamento]), null); // paga
+  const setembro = { id: 'cs2', accountId: 'k', type: 'expense', description: 'Compra', amount: 5000, date: '2026-08-20', status: 'paid' }; // fatura de setembro, venceu 12/09
+  const dois = u('2026-10-12', [compraSet, setembro]);
+  assert.deepEqual([dois.level, dois.key], ['late', '2026-09']); // a atrasada vem antes da que vence hoje
 });

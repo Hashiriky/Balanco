@@ -5,6 +5,7 @@ import { BarChart, HBars } from '@/components/charts.jsx';
 import { AccountName, CategoryLabel, TxAmount, TxDescription, useLookups } from '@/components/pages/shared.jsx';
 import { Alert, Card, Empty, Kpi, Money, PageHeader, ProgressBar } from '@/components/ui.jsx';
 import { accountsOverview, agendaOfMonth, agendaSummary, budgetRows, buildAlerts, byCategory, cashflowSeries, categoryIndex, investmentsOverview, isCredit, isPaid, monthEndForecast, monthTotals, rootOf, upcoming, commitments, dailyAllowance } from '@/lib/domain.js';
+import { announceHash } from '@/lib/focus.js';
 import { useStore } from '@/lib/store.jsx';
 import { useUI } from '@/lib/ui-context.jsx';
 import { ACCOUNT_TYPES } from '@/lib/defaults.js';
@@ -41,7 +42,7 @@ export default function Dashboard() {
       ov, real, prev, plan, agSum: agendaSummary(ag), forecast: fc, allowance: dailyAllowance(fc.projected, today), commit: commitments({ accounts, txs, recurrences, today, months: 6 }), series: cashflowSeries(txs, viewMonth, 12), total,
       inv: investmentsOverview(accounts, txs, today),
       cats: cats.map((c) => ({ id: c.categoryId, value: c.amount, label: idx.get(c.categoryId)?.name || 'Sem categoria', color: rootOf(c.categoryId, idx)?.color || '#94a3b8' })),
-      next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }),
+      next: upcoming({ recurrences, txs, today, limit: nextLimit }), alerts: buildAlerts({ accounts, txs, recurrences, budgets, categories, today }).filter((a) => !a.urgent), // os urgentes aparecem na faixa vermelha do topo (UrgentBanner)
       buds: budgetRows({ budgets, txs, categories, key: viewMonth }).slice(0, 5),
       recent: [...txs].filter((t) => isPaid(t) && !t.isYield).sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 8),
     };
@@ -67,7 +68,7 @@ export default function Dashboard() {
       <PageHeader title="Painel" subtitle={monthLabel(viewMonth)} month>
         <button type="button" className="btn btn-primary" onClick={() => ui.open('tx')}>Novo lançamento</button>
       </PageHeader>
-      {v.alerts.length > 0 && <div className="alerts">{v.alerts.map((a) => <Alert key={a.id} tone={a.tone} action={<Link href={a.href} className="link">Ver</Link>}>{a.text}{a.value ? <> — <Money cents={a.value} /></> : null}</Alert>)}</div>}
+      {v.alerts.length > 0 && <div className="alerts">{v.alerts.map((a) => <Alert key={a.id} tone={a.tone} action={<Link href={a.href} className="link" onClick={() => announceHash(a.href)}>Ver</Link>}>{a.text}{a.value ? <> — <Money cents={a.value} /></> : null}</Alert>)}</div>}
       <div className={cn('kpis', v.inv.rows.length > 0 && 'kpis-5')}>
         <Kpi label="Saldo disponível" value={<Money cents={v.ov.liquid} />} sub={v.ov.cards < 0 ? `Faturas de cartão em aberto: ${fmtMoney(-v.ov.cards)}` : 'Sem dívidas de cartão'} />
         {v.inv.rows.length > 0 && (

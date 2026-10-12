@@ -278,12 +278,22 @@ export function buildAlerts({ accounts, txs, recurrences, budgets, categories, t
   const prevLate = agendaSummary(agendaOfMonth({ recurrences, txs, key: shiftMonth(key, -1), today }));
   const lateCount = ag.lateCount + prevLate.lateCount, lateTotal = ag.late + prevLate.late;
   if (lateCount) out.push({ id: 'late', tone: 'danger', text: `${lateCount} conta${lateCount > 1 ? 's' : ''} a pagar em atraso`, value: lateTotal, href: '/agenda' });
+  const cardIds = new Set(accounts.filter(isCredit).map((c) => c.id));
+  const dueToday = agendaOfMonth({ recurrences, txs, key, today }).filter((it) => it.date === today && it.status !== 'paid' && it.type === 'expense' && !cardIds.has(it.accountId));
+  if (dueToday.length) out.push({ id: 'due-today', tone: 'danger', urgent: true, text: `${dueToday.length} conta${dueToday.length > 1 ? 's vencem' : ' vence'} HOJE`, value: sum(dueToday, (it) => it.amount), href: '/agenda#hoje' });
   accounts.filter((a) => isCredit(a) && !a.archived).forEach((card) => {
     for (const k of [shiftMonth(key, -1), key, shiftMonth(key, 1)]) {
       const inv = cardInvoice(card, txs, k, today);
       const fmt = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
       if (inv.remaining > 0 && (inv.status === 'late' || (inv.dueDate >= today && diffDays(today, inv.dueDate) <= 7))) {
-        out.push({ id: `inv:${card.id}:${k}`, tone: inv.status === 'late' ? 'danger' : 'warn', text: `Fatura ${card.name}: ${inv.status === 'late' ? 'venceu' : 'vence'} em ${inv.dueDate.split('-').reverse().join('/')}`, value: inv.remaining, href: '/contas' });
+        // urgência: atrasada e "vence hoje" são urgentes (aparecem no banner do topo de todas as telas); amanhã também fica vermelho
+        const days = diffDays(today, inv.dueDate), full = inv.dueDate.split('-').reverse().join('/');
+        const late = inv.status === 'late', hoje = !late && days === 0;
+        const text = late ? `Fatura ${card.name} venceu em ${full}: pague o quanto antes, pode estar gerando juros`
+          : hoje ? `Fatura ${card.name} vence HOJE: último dia para pagar sem juros`
+          : days === 1 ? `Fatura ${card.name} vence amanhã (${fmt(inv.dueDate)})`
+          : `Fatura ${card.name} vence em ${days} dias (${fmt(inv.dueDate)})`;
+        out.push({ id: `inv:${card.id}:${k}`, tone: late || days <= 1 ? 'danger' : 'warn', urgent: late || hoje, text, value: inv.remaining, href: `/contas#fatura-${card.id}-${k}` });
       } else if (inv.remaining > 0 && inv.closeDate <= today && inv.dueDate >= today) {
         out.push({ id: `inv:${card.id}:${k}`, tone: 'warn', text: `Fatura ${card.name} ${inv.closeDate === today ? 'fecha hoje' : `fechou em ${fmt(inv.closeDate)}`} · vence em ${fmt(inv.dueDate)}`, value: inv.remaining, href: '/contas' });
       }
@@ -319,6 +329,26 @@ export function groupByBank(accounts) {
   const groups = [...map.entries()].map(([bank, items]) => ({ bank, items: [...items].sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name, 'pt-BR')) }));
   const weight = (g) => (g.items.some((a) => a.primary) ? 0 : g.bank ? 1 : 2);
   return groups.sort((x, y) => weight(x) - weight(y) || x.bank.localeCompare(y.bank, 'pt-BR'));
+}
+
+/* ---------- Urgência da fatura do cartão ---------- */
+/**
+ * A fatura mais urgente de um cartão (entre o mês anterior, o atual e o seguinte), com saldo a pagar:
+ * level = 'late' (venceu), 'today' (vence hoje), 'soon' (vence em até 7 dias) ou null se nada preocupa.
+ */
+export function invoiceUrgency(card, txs, today = todayISO()) {
+  const key = today.slice(0, 7);
+  let best = null;
+  for (const k of [shiftMonth(key, -1), key, shiftMonth(key, 1)]) {
+    const inv = cardInvoice(card, txs, k, today);
+    if (inv.remaining <= 0) continue;
+    const days = diffDays(today, inv.dueDate);
+    const level = inv.status === 'late' ? 'late' : days === 0 ? 'today' : days > 0 && days <= 7 ? 'soon' : null;
+    if (!level) continue;
+    const rank = { late: 0, today: 1, soon: 2 }[level];
+    if (!best || rank < best.rank || (rank === best.rank && inv.dueDate < best.invoice.dueDate)) best = { key: k, level, days, rank, invoice: inv };
+  }
+  return best && { key: best.key, level: best.level, days: best.days, invoice: best.invoice };
 }
 
 /* ---------- Gasto fora do normal e contas fixas ---------- */

@@ -1,4 +1,4 @@
-# Roteiro de testes (versões 1.1 a 1.8)
+# Roteiro de testes (versões 1.1 a 1.8.3)
 
 Como usar: rode `npm run dev`, abra o site e vá marcando. Se algo não se comportar como descrito, anote **o que fez**, **o que esperava** e **o que aconteceu** (e a mensagem de erro, se houver: tecla F12, aba *Console*) e me envie.
 
@@ -79,6 +79,22 @@ Como usar: rode `npm run dev`, abra o site e vá marcando. Se algo não se compo
 ## Alerta de gasto fora do normal (1.8)
 - [ ] Quando uma categoria passa 50% da média dos últimos 3 meses, aparece um alerta amarelo no Painel com o valor do mês.
 - [ ] Categorias com pouco histórico ou valores pequenos (média abaixo de R$ 100) não geram alerta.
+
+## Avisos de vencimento (1.8.2)
+- [ ] Fatura que **vence hoje**: aparece uma **faixa vermelha** no topo, em qualquer tela, com "vence HOJE: último dia para pagar sem juros", o valor e o botão **Ver**.
+- [ ] Fatura **atrasada**: a faixa vermelha avisa que venceu e que pode estar gerando juros.
+- [ ] Fatura que vence **amanhã**: aviso vermelho no Painel (sem faixa). De 2 a 7 dias: aviso amarelo "vence em N dias".
+- [ ] **Dispensar por hoje** esconde a faixa e ela volta no dia seguinte (ou se aparecer outro aviso urgente).
+- [ ] Depois de **pagar a fatura**, o aviso some.
+- [ ] Uma conta comum com vencimento hoje também aparece na faixa ("1 conta vence HOJE").
+
+## Do aviso para a fatura (1.8.3)
+- [ ] Na faixa vermelha, clicar em **Ver** de uma fatura leva à tela **Contas**, rola até o cartão certo e o destaca com um **anel azul** por alguns segundos.
+- [ ] Estando **já na tela Contas**, clicar em **Ver** também rola e destaca o cartão.
+- [ ] Se a fatura do aviso for de **outro mês**, o painel do cartão abre nesse mês.
+- [ ] Na tela Contas, o cartão com fatura **atrasada / vencendo hoje** tem contorno vermelho e uma faixa no topo com o valor e o botão **Pagar fatura**; com vencimento em até 7 dias, contorno e faixa **laranja**.
+- [ ] Cartão sem urgência não ganha destaque.
+- [ ] Na **Agenda**, a conta que vence hoje fica em vermelho; **Ver** do aviso "conta vence HOJE" rola até ela.
 
 ## Teclado e acessibilidade
 - [ ] Dá para navegar pelo calendário do seletor com a tecla Tab e escolher dias com Enter.

@@ -21,6 +21,13 @@ export default function Agenda() {
   const today = todayISO();
   const items = useMemo(() => agendaOfMonth({ recurrences: data.recurrences, txs: data.transactions, key: viewMonth, today }), [data.recurrences, data.transactions, viewMonth, today]);
   const s = agendaSummary(items);
+  /* contas que vencem hoje ficam em destaque; o botão "Ver" do aviso (#hoje) rola até a primeira */
+  const isDueToday = (i) => i.date === today && i.status !== 'paid' && i.type === 'expense';
+  const firstToday = items.find(isDueToday);
+  useEffect(() => {
+    const go = () => { if (window.location.hash === '#hoje') setTimeout(() => document.getElementById('hoje')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' }), 120); };
+    go(); window.addEventListener('hashchange', go); return () => window.removeEventListener('hashchange', go);
+  }, [firstToday?.id]);
   const [ignored, setIgnored] = useState([]);
   useEffect(() => { try { setIgnored(JSON.parse(localStorage.getItem(IGNORED_KEY) || '[]')); } catch { /* ignore */ } }, []);
   const ignore = (k) => { const next = [...ignored, k]; setIgnored(next); try { localStorage.setItem(IGNORED_KEY, JSON.stringify(next)); } catch { /* ignore */ } };
@@ -48,7 +55,7 @@ export default function Agenda() {
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Vencimento</th><th>Descrição</th><th>Categoria</th><th>Conta</th><th>Situação</th><th className="num">Valor</th><th className="w-act" /></tr></thead>
             <tbody>{items.map((i) => (
-              <tr key={i.id} className={cn('click', i.status === 'late' && 'row-late', i.status === 'pending' && i.daysToDue <= prefs.alertDays && 'row-soon')} onClick={() => (i.kind === 'tx' ? ui.open('txView', { tx: i.tx }) : ui.open('recurrence', { recurrence: i.recurrence }))}>
+              <tr key={i.id} id={i.id === firstToday?.id ? 'hoje' : undefined} className={cn('click', i.status === 'late' && 'row-late', i.status === 'pending' && i.daysToDue <= prefs.alertDays && 'row-soon', isDueToday(i) && 'row-today')} onClick={() => (i.kind === 'tx' ? ui.open('txView', { tx: i.tx }) : ui.open('recurrence', { recurrence: i.recurrence }))}>
                 <td className="w-date">{fmtDate(i.date)}</td><td>{i.description}{i.kind === 'occurrence' && <small className="muted"> (recorrente)</small>}</td>
                 <td>{i.type === 'transfer' ? <span className="muted">Transferência</span> : <CategoryLabel id={i.categoryId} lk={lk} />}</td><td><AccountName id={i.accountId} lk={lk} /></td><td>{label(i)}</td>
                 <td className="num"><Money cents={i.type === 'income' ? i.amount : -i.amount} tone="auto" /></td>
